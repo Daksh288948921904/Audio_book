@@ -39,7 +39,7 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
           <div>
             <div className="assign-title">Which chapter?</div>
             <div className="assign-sub">
-              Assign this recording to a chapter. It will be transcribed and analysed automatically.
+              Assign this recording to a chapter. It will be processed automatically.
             </div>
           </div>
           {!uploading && (
@@ -51,7 +51,7 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
           <div className="assign-uploading">
             <div className="spinner" />
             <span>
-              Transcribing &amp; detecting intent for Chapter {targetChapter?.number}…
+              Processing your recording for Chapter {targetChapter?.number}…
             </span>
           </div>
         ) : (
@@ -71,7 +71,7 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
                   <div className="assign-ch-s">
                     {locked ? (
                       <span style={{ color: ch.status === "done" ? "var(--green)" : "var(--amber)" }}>
-                        {ch.status === "done" ? "✓ done" : "generating…"}
+                        {ch.status === "done" ? "✓ done" : "writing…"}
                       </span>
                     ) : `${n} seg${n !== 1 ? "s" : ""}`}
                   </div>

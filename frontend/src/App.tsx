@@ -161,7 +161,7 @@ export default function App() {
           <div className="logo-mark">I</div>
           <div>
             <div className="logo-text">Inkwell</div>
-            <div className="logo-sub">AI Book Studio</div>
+            <div className="logo-sub">Writing Studio</div>
           </div>
         </div>
 
@@ -224,7 +224,7 @@ export default function App() {
           <div className="welcome">
             <div className="welcome-orb">✍</div>
             <h1>Start your first book</h1>
-            <p>Record your voice, assign segments to chapters, and let AI turn raw ideas into polished prose.</p>
+            <p>Record your voice, assign segments to chapters, and watch them become a finished manuscript.</p>
             <button className="btn-create-first" onClick={() => setShowNewBook(true)}>
               + Create a Book
             </button>
@@ -258,7 +258,7 @@ export default function App() {
               <div className="feed-section">
                 <div className="feed-head">
                   <div className="feed-label">Chapters</div>
-                  <div className="feed-tally">{doneCount}/{chapters.length} generated</div>
+                  <div className="feed-tally">{doneCount}/{chapters.length} complete</div>
                 </div>
                 <div className="chapter-list">
                   {chapters.map((ch, i) => (

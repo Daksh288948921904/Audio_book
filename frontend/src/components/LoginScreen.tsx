@@ -33,7 +33,7 @@ export default function LoginScreen({ onLogin }: Props) {
       <div className="ls-left">
         <div className="ls-eyebrow">
           <span className="ls-dot" />
-          AI-Powered Book Studio
+          Your Private Writing Studio
         </div>
 
         <h1 className="ls-title">
@@ -44,14 +44,14 @@ export default function LoginScreen({ onLogin }: Props) {
 
         <p className="ls-sub">
           Record your ideas. Assign them to chapters.<br />
-          Let AI write polished prose — in your style.
+          Watch them become polished prose — in your style.
         </p>
 
         <div className="ls-features">
           {[
-            ["✦", "Groq Whisper transcription — near-instant"],
-            ["✦", "35-tone intent detection per recording"],
-            ["✦", "LLaMA 70B narrative chapter generation"],
+            ["✦", "Instant voice-to-text — speak naturally"],
+            ["✦", "Tone-aware writing for every recording"],
+            ["✦", "Beautifully crafted chapters, automatically"],
             ["✦", "Private workspace — only you see your books"],
             ["✦", "Export any chapter as a PDF"],
           ].map(([icon, text], i) => (
@@ -102,7 +102,7 @@ export default function LoginScreen({ onLogin }: Props) {
           <div className="ls-card-badges">
             <div className="ls-badge">🔒 Private</div>
             <div className="ls-badge">☁ Cloud sync</div>
-            <div className="ls-badge">✦ AI-powered</div>
+            <div className="ls-badge">✦ Voice-powered</div>
           </div>
         </div>
 

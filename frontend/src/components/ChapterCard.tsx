@@ -40,7 +40,7 @@ export default function ChapterCard({
 
   const isGenerating = generating || chapter.status === "generating";
   const gradient = GRADIENTS[index % GRADIENTS.length];
-  const statusLabel = isGenerating ? "Generating" : chapter.status === "done" ? "Complete" : "Recording";
+  const statusLabel = isGenerating ? "Writing" : chapter.status === "done" ? "Complete" : "Recording";
 
   async function handleGenerate() {
     setGenerating(true);
@@ -221,7 +221,7 @@ export default function ChapterCard({
                 <div className="cc-actions">
                   {chapter.status === "recording" && segments.length > 0 && (
                     <button className="cc-gen" onClick={handleGenerate}>
-                      ✦ Generate Chapter
+                      ✦ Write Chapter
                     </button>
                   )}
                   {chapter.status === "done" && (
