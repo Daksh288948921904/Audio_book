@@ -20,6 +20,11 @@ WORKDIR /app
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download fastembed ONNX model into the image so runtime startup is instant.
+# Without this, every cold start downloads ~25 MB, causing workers to time out
+# before the health check passes.
+RUN python3 -c "from fastembed import TextEmbedding; list(TextEmbedding('BAAI/bge-small-en-v1.5').embed(['warmup']))"
+
 # Copy source
 COPY backend/ ./backend/
 
@@ -31,7 +36,7 @@ ENV PORT=8000
 EXPOSE 8000
 
 CMD gunicorn backend.main:app \
-    -w 2 \
+    -w 1 \
     -k uvicorn.workers.UvicornWorker \
     --bind "0.0.0.0:${PORT}" \
     --timeout 120 \
