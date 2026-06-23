@@ -1,0 +1,22 @@
+# Secrets — never commit
+backend/.env
+frontend/.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Runtime / local data
+uploads/
+audiobook.db
+
+# OS
+.DS_Store

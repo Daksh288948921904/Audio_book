@@ -1,0 +1,246 @@
+import { useRef, useState } from "react";
+import {
+  finishChapter, deleteChapter, reopenChapter,
+  updateChapterTitle, deleteSegment,
+  pdfUrl, getChapter, type Chapter, type Segment,
+} from "../api/client";
+import SegmentCard from "./SegmentCard";
+
+const GRADIENTS = [
+  "linear-gradient(145deg, #0f1f3d 0%, #1a3a6b 55%, #2a4f8f 100%)",
+  "linear-gradient(145deg, #1a0d2e 0%, #3d1a6e 55%, #5a2d9e 100%)",
+  "linear-gradient(145deg, #062520 0%, #0d4a3f 55%, #1a7060 100%)",
+  "linear-gradient(145deg, #2a0612 0%, #5c0e24 55%, #8a1c3c 100%)",
+  "linear-gradient(145deg, #1f1000 0%, #4a2a00 55%, #7a4a0a 100%)",
+  "linear-gradient(145deg, #0d0d1f 0%, #1c1c3d 55%, #2c2c6a 100%)",
+  "linear-gradient(145deg, #0a1a0a 0%, #1a3a1a 55%, #2d5c2d 100%)",
+  "linear-gradient(145deg, #1a1010 0%, #3d1f1f 55%, #6a2828 100%)",
+];
+
+interface Props {
+  chapter: Chapter;
+  segments: Segment[];
+  index: number;
+  onChapterUpdated: (ch: Chapter) => void;
+  onChapterDeleted: (id: number) => void;
+  onSegmentDeleted: (chapterId: number, segId: number) => void;
+  onViewManuscript: (ch: Chapter) => void;
+}
+
+export default function ChapterCard({
+  chapter, segments, index, onChapterUpdated, onChapterDeleted, onSegmentDeleted, onViewManuscript,
+}: Props) {
+  const [open, setOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [editTitle, setEditTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [deletingSegs, setDeletingSegs] = useState<Set<number>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  const isGenerating = generating || chapter.status === "generating";
+  const gradient = GRADIENTS[index % GRADIENTS.length];
+  const statusLabel = isGenerating ? "Generating" : chapter.status === "done" ? "Complete" : "Recording";
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      const r = await finishChapter(chapter.id);
+      const full = await getChapter(chapter.id);
+      onChapterUpdated({ ...full, generated_text: r.generated_text });
+    } catch (e) { setError(String(e)); }
+    finally { setGenerating(false); }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Delete "${chapter.title || `Chapter ${chapter.number}`}"? Cannot be undone.`)) return;
+    try {
+      await deleteChapter(chapter.id);
+      onChapterDeleted(chapter.id);
+      setOpen(false);
+    } catch (e) { setError(String(e)); }
+  }
+
+  async function handleReopen() {
+    try {
+      await reopenChapter(chapter.id);
+      onChapterUpdated({ ...chapter, status: "recording", generated_text: undefined, summary: undefined });
+    } catch (e) { setError(String(e)); }
+  }
+
+  function startEdit() {
+    setTitleDraft(chapter.title ?? "");
+    setEditTitle(true);
+    setTimeout(() => titleRef.current?.focus(), 20);
+  }
+
+  async function saveTitle() {
+    if (titleDraft.trim()) {
+      try {
+        await updateChapterTitle(chapter.id, titleDraft.trim());
+        onChapterUpdated({ ...chapter, title: titleDraft.trim() });
+      } catch (e) { setError(String(e)); }
+    }
+    setEditTitle(false);
+  }
+
+  async function handleDelSeg(segId: number) {
+    setDeletingSegs((s) => new Set(s).add(segId));
+    try { await deleteSegment(segId); onSegmentDeleted(chapter.id, segId); }
+    catch (e) { setError(String(e)); }
+    finally { setDeletingSegs((s) => { const n = new Set(s); n.delete(segId); return n; }); }
+  }
+
+  function downloadPdf(e: React.MouseEvent) {
+    e.stopPropagation();
+    const a = document.createElement("a");
+    a.href = pdfUrl(chapter.id);
+    a.download = `chapter_${chapter.number}.pdf`;
+    a.click();
+  }
+
+  async function openAndView() {
+    const full = await getChapter(chapter.id);
+    onViewManuscript(full);
+  }
+
+  return (
+    <>
+      {/* ── Grid card face ── */}
+      <div
+        className={`cc cc-${chapter.status}`}
+        style={{ background: gradient, animationDelay: `${index * 60}ms` }}
+        onClick={() => setOpen(true)}
+      >
+        <div className={`cc-badge cc-badge-${chapter.status}`}>
+          {chapter.status === "recording" && <span className="pip-rec" />}
+          {chapter.status === "generating" && <span className="pip-gen" />}
+          {chapter.status === "done" && <span className="pip-done" />}
+          {statusLabel}
+        </div>
+
+        <div className="cc-big-num">{String(chapter.number).padStart(2, "0")}</div>
+
+        {chapter.status === "done" && chapter.generated_text && (
+          <div className="cc-card-excerpt">
+            {chapter.generated_text.replace(/\n+/g, " ").slice(0, 110)}…
+          </div>
+        )}
+
+        <div className="cc-foot">
+          <div className="cc-foot-title">
+            {chapter.title || `Chapter ${chapter.number}`}
+          </div>
+          <div className="cc-foot-meta">
+            {segments.length} recording{segments.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Detail modal ── */}
+      {open && (
+        <div className="cc-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="cc-modal">
+            <div className="cc-modal-head" style={{ background: gradient }}>
+              <div className="cc-modal-num">
+                {String(chapter.number).padStart(2, "0")}
+              </div>
+              <div className="cc-modal-head-info">
+                {editTitle ? (
+                  <input
+                    ref={titleRef}
+                    className="cc-title-input"
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveTitle(); if (e.key === "Escape") setEditTitle(false); }}
+                    onBlur={saveTitle}
+                  />
+                ) : (
+                  <div
+                    className="cc-modal-title"
+                    onDoubleClick={chapter.status === "recording" ? startEdit : undefined}
+                    title={chapter.status === "recording" ? "Double-click to rename" : undefined}
+                  >
+                    {chapter.title || `Chapter ${chapter.number}`}
+                  </div>
+                )}
+                <div className={`cc-badge cc-badge-${chapter.status}`} style={{ marginTop: 6, width: "fit-content" }}>
+                  {chapter.status === "recording" && <span className="pip-rec" />}
+                  {chapter.status === "generating" && <span className="pip-gen" />}
+                  {chapter.status === "done" && <span className="pip-done" />}
+                  {statusLabel}
+                </div>
+              </div>
+              <button className="cc-modal-close" onClick={() => setOpen(false)}>✕</button>
+            </div>
+
+            <div className="cc-modal-body">
+              {error && (
+                <div className="error-bar">
+                  {error}<button onClick={() => setError(null)}>×</button>
+                </div>
+              )}
+
+              {isGenerating && (
+                <div className="cc-generating">
+                  <div className="spinner" style={{ borderTopColor: "var(--amber)" }} />
+                  Writing your chapter… this usually takes 20–60 seconds.
+                </div>
+              )}
+
+              {chapter.status === "done" && chapter.generated_text && !isGenerating && (
+                <div className="cc-excerpt">
+                  {chapter.generated_text.replace(/\n+/g, " ").slice(0, 400)}…
+                </div>
+              )}
+
+              {!isGenerating && segments.length > 0 && (
+                <div className="cc-segs-list">
+                  <div className="cc-segs-label">
+                    {segments.length} Recording{segments.length !== 1 ? "s" : ""}
+                  </div>
+                  {segments.map((seg) => (
+                    <SegmentCard
+                      key={seg.id}
+                      segment={seg}
+                      onDelete={handleDelSeg}
+                      deleting={deletingSegs.has(seg.id)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!isGenerating && segments.length === 0 && chapter.status === "recording" && (
+                <div className="cc-empty-segs">
+                  No recordings yet — record above and assign this chapter.
+                </div>
+              )}
+
+              {!isGenerating && (
+                <div className="cc-actions">
+                  {chapter.status === "recording" && segments.length > 0 && (
+                    <button className="cc-gen" onClick={handleGenerate}>
+                      ✦ Generate Chapter
+                    </button>
+                  )}
+                  {chapter.status === "done" && (
+                    <>
+                      <button className="cc-view" onClick={openAndView}>View Manuscript</button>
+                      <button className="cc-pdf" onClick={downloadPdf}>↓ PDF</button>
+                      <button className="cc-reopen" onClick={handleReopen}>← Re-record</button>
+                    </>
+                  )}
+                  {chapter.status === "recording" && (
+                    <button className="cc-rename" onClick={startEdit}>✏ Rename</button>
+                  )}
+                  <button className="cc-delete" onClick={handleDelete}>🗑</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

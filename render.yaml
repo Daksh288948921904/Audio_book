@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: audiobook-studio
+    env: docker               # multi-stage Dockerfile: Node builds frontend, Python runs backend
+    region: oregon
+    plan: standard            # sentence-transformers + torch need ≥ 2 GB RAM
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+
+    envVars:
+      # ── Groq key pool ── add values as secrets in Render dashboard ──
+      - key: GROQ_API_KEY_1
+        sync: false
+      - key: GROQ_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY_3
+        sync: false
+      - key: GROQ_API_KEY_4
+        sync: false
+      - key: GROQ_API_KEY_5
+        sync: false
+      - key: GROQ_API_KEY_6
+        sync: false
+      - key: GROQ_API_KEY_7
+        sync: false
+
+      # ── Groq models ──
+      - key: GROQ_STT_MODEL
+        value: whisper-large-v3-turbo
+      - key: GROQ_INTENT_MODEL
+        value: llama-3.1-8b-instant
+      - key: GROQ_LLM_MODEL
+        value: llama-3.3-70b-versatile
+
+      # ── Qdrant Cloud ── set as secrets ──
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+
+      # ── PostgreSQL / Supabase ── set as secret ──
+      - key: DATABASE_URL
+        sync: false
+
+      # ── File storage: /tmp is writable; audio deleted immediately after transcription ──
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+
+      # ── Google OAuth + JWT ── set as secrets ──
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRE_DAYS
+        value: "30"
+
+      # ── CORS: frontend is served from the same origin, so this is only needed
+      #    for local dev cross-origin. Set to your service URL after first deploy,
+      #    e.g. https://audiobook-studio.onrender.com
+      - key: CORS_ORIGINS
+        value: https://audiobook-studio.onrender.com
