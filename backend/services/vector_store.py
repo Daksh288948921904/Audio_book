@@ -5,13 +5,13 @@ from qdrant_client.models import (
     Filter, FieldCondition, MatchValue, FilterSelector,
     PayloadSchemaType,
 )
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from backend.config import QDRANT_URL, QDRANT_API_KEY
 
-VECTOR_DIM = 384  # all-MiniLM-L6-v2 output dim
+VECTOR_DIM = 384  # BAAI/bge-small-en-v1.5 output dim
 
 _client: QdrantClient | None = None
-_embedder: SentenceTransformer | None = None
+_embedder: TextEmbedding | None = None
 
 
 def _get_client() -> QdrantClient:
@@ -21,10 +21,11 @@ def _get_client() -> QdrantClient:
     return _client
 
 
-def _get_embedder() -> SentenceTransformer:
+def _get_embedder() -> TextEmbedding:
     global _embedder
     if _embedder is None:
-        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        # ONNX-based — ~25 MB download, no PyTorch, fits in free-tier RAM
+        _embedder = TextEmbedding("BAAI/bge-small-en-v1.5")
     return _embedder
 
 
@@ -55,7 +56,7 @@ def add_chunk(chapter_number: int, text: str, intent: str, chunk_type: str = "se
     embedder = _get_embedder()
     ensure_collection(chapter_number)
 
-    vector = embedder.encode(text).tolist()
+    vector = next(embedder.embed([text])).tolist()
     point = PointStruct(
         id=str(uuid.uuid4()),
         vector=vector,
