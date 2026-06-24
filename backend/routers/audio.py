@@ -1,5 +1,6 @@
 import os
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.db import get_db, AudioSegment, Chapter
@@ -45,6 +46,7 @@ async def upload_audio(
         "transcript": segment.transcript,
         "intent": segment.intent,
         "filename": segment.filename,
+        "has_audio": bool(segment.filename),
     }
 
 
@@ -77,6 +79,28 @@ def get_segments(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth
     )
     return [
         {"id": s.id, "order_index": s.order_index, "transcript": s.transcript,
-         "intent": s.intent, "filename": s.filename}
+         "intent": s.intent, "filename": s.filename, "has_audio": bool(s.filename)}
         for s in segments
     ]
+
+
+_AUDIO_MIME: dict[str, str] = {
+    ".webm": "audio/webm",
+    ".mp3":  "audio/mpeg",
+    ".wav":  "audio/wav",
+    ".m4a":  "audio/mp4",
+    ".ogg":  "audio/ogg",
+    ".mp4":  "audio/mp4",
+}
+
+
+@router.get("/file/{segment_id}")
+def get_audio_file(segment_id: int, db: Session = Depends(get_db), _: dict = _auth):
+    segment = db.query(AudioSegment).filter(AudioSegment.id == segment_id).first()
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+    if not segment.filename or not os.path.exists(segment.filename):
+        raise HTTPException(status_code=410, detail="Audio file has expired or been deleted")
+    ext = os.path.splitext(segment.filename)[1].lower()
+    media_type = _AUDIO_MIME.get(ext, "audio/webm")
+    return FileResponse(segment.filename, media_type=media_type)

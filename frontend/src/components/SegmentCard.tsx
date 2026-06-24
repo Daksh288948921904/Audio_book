@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import type { Segment } from "../api/client";
+import { fetchAudioBlob } from "../api/client";
 
 interface Props {
   segment: Segment;
@@ -43,6 +45,41 @@ const INTENT: Record<string, { color: string; bg: string }> = {
 };
 const DEF = { color: "#5C5C80", bg: "rgba(92,92,128,0.06)" };
 
+function AudioPlayer({ segmentId }: { segmentId: number }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl); };
+  }, [blobUrl]);
+
+  async function load() {
+    setLoading(true);
+    const url = await fetchAudioBlob(segmentId);
+    setLoading(false);
+    if (!url) { setExpired(true); return; }
+    setBlobUrl(url);
+  }
+
+  if (expired) {
+    return <span className="audio-expired">Audio expired</span>;
+  }
+
+  if (!blobUrl) {
+    return (
+      <button className="audio-load-btn" onClick={load} disabled={loading}>
+        {loading
+          ? <div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+          : <span>▶</span>}
+        {loading ? "Loading…" : "Play"}
+      </button>
+    );
+  }
+
+  return <audio className="audio-player" src={blobUrl} controls autoPlay />;
+}
+
 export default function SegmentCard({ segment, onDelete, deleting }: Props) {
   const s = INTENT[segment.intent?.toLowerCase()] ?? DEF;
   return (
@@ -57,8 +94,11 @@ export default function SegmentCard({ segment, onDelete, deleting }: Props) {
     >
       <div className="seg-idx">{segment.order_index}</div>
       <div className="seg-body">
-        <div className="seg-badge" style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}22` }}>
-          {segment.intent || "unknown"}
+        <div className="seg-top">
+          <div className="seg-badge" style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}22` }}>
+            {segment.intent || "unknown"}
+          </div>
+          {segment.has_audio && <AudioPlayer segmentId={segment.id} />}
         </div>
         <div className="seg-text">
           {segment.transcript || <em style={{ color: "var(--text-3)" }}>No transcript</em>}

@@ -44,6 +44,7 @@ export interface Segment {
   transcript: string;
   intent: string;
   filename: string;
+  has_audio: boolean;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -186,6 +187,13 @@ export async function deleteSegment(segmentId: number): Promise<void> {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await res.text());
+}
+
+export async function fetchAudioBlob(segmentId: number): Promise<string | null> {
+  const res = await fetch(`${BASE}/audio/file/${segmentId}`, { headers: authHeaders() });
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }
 
 export function pdfUrl(chapterId: number): string {

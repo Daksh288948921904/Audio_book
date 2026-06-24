@@ -890,6 +890,48 @@ html, body, #root {
 }
 .seg-del:hover { opacity: 1; }
 
+.seg-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+
+.audio-load-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: rgba(91,141,239,0.1);
+  border: 1px solid rgba(91,141,239,0.22);
+  color: var(--blue-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.audio-load-btn:hover:not(:disabled) { background: rgba(91,141,239,0.2); }
+.audio-load-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.audio-player {
+  height: 28px;
+  width: 100%;
+  max-width: 260px;
+  border-radius: 20px;
+  margin-top: 2px;
+  accent-color: var(--blue);
+}
+
+.audio-expired {
+  font-size: 10px;
+  color: var(--text-3);
+  font-style: italic;
+}
+
 /* ═══════════════════════════════════════════════════
    MANUSCRIPT OVERLAY
    ═══════════════════════════════════════════════════ */
