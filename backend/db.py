@@ -55,13 +55,14 @@ class Chapter(Base):
 class AudioSegment(Base):
     __tablename__ = "audio_segments"
 
-    id          = Column(Integer, primary_key=True, index=True)
-    chapter_id  = Column(Integer, ForeignKey("chapters.id"), nullable=False)
-    filename    = Column(String, nullable=False)
-    transcript  = Column(Text, nullable=True)
-    intent      = Column(String, nullable=True)
-    order_index = Column(Integer, nullable=False)
-    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id              = Column(Integer, primary_key=True, index=True)
+    chapter_id      = Column(Integer, ForeignKey("chapters.id"), nullable=False)
+    filename        = Column(String, nullable=False)
+    transcript      = Column(Text, nullable=True)
+    intent          = Column(String, nullable=True)
+    order_index     = Column(Integer, nullable=False)
+    created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    file_expires_at = Column(DateTime, nullable=True)  # null once file has been deleted
 
     chapter = relationship("Chapter", back_populates="segments")
 
@@ -123,7 +124,18 @@ def get_db():
         db.close()
 
 
+def _postgres_migrate():
+    """Add columns introduced after initial schema creation."""
+    with engine.connect() as conn:
+        conn.execute(text(
+            "ALTER TABLE audio_segments ADD COLUMN IF NOT EXISTS file_expires_at TIMESTAMP WITH TIME ZONE"
+        ))
+        conn.commit()
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)  # creates all tables on fresh DB (SQLite or PostgreSQL)
     if _is_sqlite:
         _sqlite_migrate()
+    else:
+        _postgres_migrate()

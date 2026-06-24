@@ -1,4 +1,8 @@
+
+import asyncio
+import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,12 +11,53 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.db import init_db, get_db, User
+from backend.db import init_db, get_db, SessionLocal, AudioSegment, User
 from backend.routers import audio, chapters, books
 from backend.config import CORS_ORIGINS
 from backend.auth import verify_google_token, create_app_token, get_current_user
 
 _FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+
+
+def _delete_expired_audio_files() -> int:
+    """Delete audio files past their 2-day expiry. Returns count deleted."""
+    deleted = 0
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        expired = (
+            db.query(AudioSegment)
+            .filter(
+                AudioSegment.filename != "",
+                AudioSegment.file_expires_at.isnot(None),
+                AudioSegment.file_expires_at <= now,
+            )
+            .all()
+        )
+        for seg in expired:
+            try:
+                if os.path.exists(seg.filename):
+                    os.remove(seg.filename)
+                    deleted += 1
+            except OSError:
+                pass
+            seg.filename = ""
+            seg.file_expires_at = None
+        if expired:
+            db.commit()
+    finally:
+        db.close()
+    return deleted
+
+
+async def _audio_cleanup_loop():
+    """Run at startup and then every hour to purge expired audio files."""
+    while True:
+        try:
+            _delete_expired_audio_files()
+        except Exception:
+            pass
+        await asyncio.sleep(3600)
 
 
 @asynccontextmanager
@@ -21,7 +66,9 @@ async def lifespan(app: FastAPI):
     # Pre-load embedding model at startup so first upload isn't delayed by download
     from backend.services.vector_store import _get_embedder
     _get_embedder()
+    task = asyncio.create_task(_audio_cleanup_loop())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="AudioBook API", version="2.0.0", lifespan=lifespan)

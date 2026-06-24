@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
 from backend.db import Chapter, AudioSegment
@@ -13,18 +13,16 @@ def process_audio_segment(db: Session, chapter_id: int, audio_path: str, order_i
     transcript = transcription.transcribe(audio_path)
     intent_label = intent.classify_intent(transcript)
 
-    # Audio file is no longer needed after transcription — delete immediately
-    try:
-        os.remove(audio_path)
-    except OSError:
-        pass
+    # Keep the audio file for 2 days, then the cleanup task will remove it
+    expires_at = datetime.now(timezone.utc) + timedelta(days=2)
 
     segment = AudioSegment(
         chapter_id=chapter_id,
-        filename="",
+        filename=audio_path,
         transcript=transcript,
         intent=intent_label,
         order_index=order_index,
+        file_expires_at=expires_at,
     )
     db.add(segment)
     db.commit()
