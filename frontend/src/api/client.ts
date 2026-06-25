@@ -199,3 +199,10 @@ export async function fetchAudioBlob(segmentId: number): Promise<string | null> 
 export function pdfUrl(chapterId: number): string {
   return `${BASE}/chapters/${chapterId}/pdf`;
 }
+
+export async function fetchChapterSpeech(chapterId: number): Promise<string | null> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/speech`, { headers: authHeaders() });
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}

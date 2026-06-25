@@ -31,7 +31,7 @@ class GroqPool:
             logger.warning("Groq key #%d rate-limited — rotating to key #%d", old + 1, self._index + 1)
 
     def chat(self, **kwargs):
-        for attempt in range(len(self._keys)):
+        for _ in range(len(self._keys)):
             try:
                 return self._current().chat.completions.create(**kwargs)
             except RateLimitError:
@@ -43,8 +43,25 @@ class GroqPool:
                     raise
         raise RuntimeError("All Groq API keys exhausted on chat request")
 
+    def speech(self, text: str, model: str = "playai-tts", voice: str = "Fritz-PlayAI") -> bytes:
+        """Return raw WAV bytes for the given text."""
+        for _ in range(len(self._keys)):
+            try:
+                response = self._current().audio.speech.create(
+                    model=model, voice=voice, input=text, response_format="wav"
+                )
+                return response.content
+            except RateLimitError:
+                self._rotate()
+            except APIStatusError as e:
+                if e.status_code == 429:
+                    self._rotate()
+                else:
+                    raise
+        raise RuntimeError("All Groq API keys exhausted on speech request")
+
     def transcribe(self, file_tuple: tuple, model: str, **kwargs):
-        for attempt in range(len(self._keys)):
+        for _ in range(len(self._keys)):
             try:
                 return self._current().audio.transcriptions.create(
                     file=file_tuple, model=model, **kwargs
