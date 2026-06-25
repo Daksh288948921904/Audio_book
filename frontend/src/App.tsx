@@ -3,7 +3,7 @@ import {
   listBooks, listBookChapters, getSegments, clearAll, getMe, clearAuthToken,
   type Book, type Chapter, type Segment,
 } from "./api/client";
-import LoginScreen from "./components/LoginScreen";
+import LandingPage from "./components/LandingPage";
 import NewBookModal from "./components/NewBookModal";
 import RecordZone from "./components/RecordZone";
 import AssignModal from "./components/AssignModal";
@@ -146,7 +146,7 @@ export default function App() {
   if (!authChecked) return null;
 
   // ── Login gate ──────────────────────────────────────────────────────────
-  if (!authUser) return <LoginScreen onLogin={handleLogin} />;
+  if (!authUser) return <LandingPage onLogin={handleLogin} />;
 
   const activeBook = books.find((b) => b.id === activeBookId) ?? null;
   const totalSegs = Object.values(segsMap).reduce((a, s) => a + s.length, 0);
