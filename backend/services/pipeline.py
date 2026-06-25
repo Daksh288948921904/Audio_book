@@ -4,13 +4,21 @@ from sqlalchemy.orm import Session
 
 from backend.db import Chapter, AudioSegment
 from backend.services import transcription, intent, vector_store, llm
+from backend.services.audio_preprocess import preprocess_audio
 from backend.services.pdf import generate_pdf
 
 
 def process_audio_segment(db: Session, chapter_id: int, audio_path: str, order_index: int) -> AudioSegment:
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
 
-    transcript = transcription.transcribe(audio_path)
+    # Preprocess: HPF + loudnorm + 16 kHz mono. Falls back to original on error.
+    processed_path = preprocess_audio(audio_path)
+    try:
+        transcript = transcription.transcribe(processed_path or audio_path)
+    finally:
+        if processed_path and os.path.exists(processed_path):
+            os.unlink(processed_path)
+
     intent_label = intent.classify_intent(transcript)
 
     # Keep the audio file for 2 days, then the cleanup task will remove it

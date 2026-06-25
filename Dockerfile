@@ -12,7 +12,7 @@ FROM python:3.11-slim
 
 # psycopg2 needs libpq; sentence-transformers needs git for some model fetches
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libpq-dev gcc \
+        libpq-dev gcc ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
