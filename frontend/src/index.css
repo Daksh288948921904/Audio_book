@@ -565,6 +565,34 @@ html, body, #root {
   font-size: 11.5px;
   color: var(--text-2);
 }
+.btn-compile-all {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--violet,#8B5CF6), #A855F7);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: opacity .15s, transform .15s, box-shadow .15s;
+  box-shadow: 0 2px 12px rgba(139,92,246,0.35);
+  letter-spacing: -0.1px;
+}
+.btn-compile-all::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%);
+  animation: lp-shimmer 2.4s ease-in-out infinite;
+}
+.btn-compile-all:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 18px rgba(139,92,246,0.5); }
+.btn-compile-all:disabled { opacity: 0.65; cursor: default; transform: none; }
 
 /* Chapter grid */
 .chapter-list {

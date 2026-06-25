@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   listBooks, listBookChapters, getSegments, clearAll, getMe, clearAuthToken,
+  finishChapter, getChapter,
   type Book, type Chapter, type Segment,
 } from "./api/client";
 import LandingPage from "./components/LandingPage";
@@ -26,6 +27,8 @@ export default function App() {
   const [showNewBook, setShowNewBook] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [compiling, setCompiling] = useState(false);
+  const [compileProgress, setCompileProgress] = useState({ done: 0, total: 0 });
 
   // ── Restore session from localStorage on mount ──────────────────────────
   useEffect(() => {
@@ -136,6 +139,26 @@ export default function App() {
 
   function handleSegmentDeleted(chapterId: number, segId: number) {
     setSegsMap((prev) => ({ ...prev, [chapterId]: (prev[chapterId] ?? []).filter((s) => s.id !== segId) }));
+  }
+
+  async function handleCompileAll() {
+    const pending = chapters.filter(
+      (ch) => ch.status === "recording" && (segsMap[ch.id]?.length ?? 0) > 0
+    );
+    if (!pending.length) return;
+    setCompiling(true);
+    setCompileProgress({ done: 0, total: pending.length });
+    for (const ch of pending) {
+      try {
+        const r = await finishChapter(ch.id);
+        const full = await getChapter(ch.id);
+        handleChapterUpdated({ ...full, generated_text: r.generated_text });
+      } catch (e) {
+        setGlobalError(`Chapter ${ch.number} failed: ${String(e)}`);
+      }
+      setCompileProgress((p) => ({ ...p, done: p.done + 1 }));
+    }
+    setCompiling(false);
   }
 
   async function handleViewManuscript(ch: Chapter) {
@@ -258,7 +281,21 @@ export default function App() {
               <div className="feed-section">
                 <div className="feed-head">
                   <div className="feed-label">Chapters</div>
-                  <div className="feed-tally">{doneCount}/{chapters.length} complete</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {chapters.some((ch) => ch.status === "recording" && (segsMap[ch.id]?.length ?? 0) > 0) && (
+                      <button
+                        className="btn-compile-all"
+                        onClick={handleCompileAll}
+                        disabled={compiling}
+                      >
+                        {compiling
+                          ? <><div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, borderTopColor: "#C084FC" }} /> Writing {compileProgress.done + 1}/{compileProgress.total}…</>
+                          : <>✦ Write All</>
+                        }
+                      </button>
+                    )}
+                    <div className="feed-tally">{doneCount}/{chapters.length} complete</div>
+                  </div>
                 </div>
                 <div className="chapter-list">
                   {chapters.map((ch, i) => (
