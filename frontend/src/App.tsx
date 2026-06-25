@@ -282,11 +282,12 @@ export default function App() {
                 <div className="feed-head">
                   <div className="feed-label">Chapters</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    {chapters.some((ch) => ch.status === "recording" && (segsMap[ch.id]?.length ?? 0) > 0) && (
+                    {chapters.length > 0 && (
                       <button
                         className="btn-compile-all"
                         onClick={handleCompileAll}
-                        disabled={compiling}
+                        disabled={compiling || !chapters.some((ch) => ch.status === "recording" && (segsMap[ch.id]?.length ?? 0) > 0)}
+                        title={doneCount === chapters.length ? "All chapters already compiled" : "Write all chapters with recordings"}
                       >
                         {compiling
                           ? <><div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, borderTopColor: "#C084FC" }} /> Writing {compileProgress.done + 1}/{compileProgress.total}…</>

@@ -592,7 +592,8 @@ html, body, #root {
   animation: lp-shimmer 2.4s ease-in-out infinite;
 }
 .btn-compile-all:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 18px rgba(139,92,246,0.5); }
-.btn-compile-all:disabled { opacity: 0.65; cursor: default; transform: none; }
+.btn-compile-all:disabled { opacity: 0.38; cursor: default; transform: none; background: var(--surface-3); box-shadow: none; }
+.btn-compile-all:disabled::after { display: none; }
 
 /* Chapter grid */
 .chapter-list {
