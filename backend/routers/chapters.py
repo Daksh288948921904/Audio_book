@@ -97,18 +97,6 @@ def download_pdf(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth
     )
 
 
-@router.get("/{chapter_id}/speech")
-def get_chapter_speech(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    if not chapter.generated_text:
-        raise HTTPException(status_code=400, detail="Chapter has no generated text")
-    from backend.services.tts import generate_chapter_audio
-    audio_bytes = generate_chapter_audio(chapter.generated_text)
-    return Response(content=audio_bytes, media_type="audio/wav")
-
-
 @router.patch("/{chapter_id}/text")
 def update_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db), _: dict = _auth):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()

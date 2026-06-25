@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { pdfUrl, updateChapterText, fetchChapterSpeech } from "../api/client";
+import { pdfUrl, updateChapterText } from "../api/client";
 
 interface Props {
   chapterId: number;
@@ -11,94 +11,91 @@ interface Props {
   onClose?: () => void;
 }
 
-function fmt(s: number) {
-  if (!isFinite(s) || isNaN(s)) return "0:00";
-  return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+// ── Clean text for TTS ────────────────────────────────────────────────────────
+function cleanForSpeech(text: string): string {
+  return text
+    .replace(/#{1,6}\s*/g, "")
+    .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
-function VoicePlayer({ chapterId }: { chapterId: number }) {
-  const audioRef                   = useRef<HTMLAudioElement>(null);
-  const [blobUrl, setBlobUrl]       = useState<string | null>(null);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
-  const [playing, setPlaying]       = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration]     = useState(0);
+// ── Pick the best available voice ─────────────────────────────────────────────
+function pickVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  const PREFER = [
+    "Google UK English Male", "Google US English",
+    "Samantha",               // macOS
+    "Daniel",                 // macOS UK
+    "Karen",                  // macOS AU
+    "Microsoft David",        // Windows
+    "Microsoft Mark",         // Windows
+  ];
+  for (const name of PREFER) {
+    const v = voices.find((v) => v.name.startsWith(name));
+    if (v) return v;
+  }
+  return voices.find((v) => v.lang.startsWith("en")) ?? null;
+}
 
-  useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, [blobUrl]);
+// ── Voice player using Web Speech API ────────────────────────────────────────
+function VoicePlayer({ text }: { text: string }) {
+  const [playing,  setPlaying]  = useState(false);
+  const [started,  setStarted]  = useState(false);
+  const [progress, setProgress] = useState(0);   // 0–100 rough word %
+  const wordCountRef = useRef(0);
+  const wordsSpokenRef = useRef(0);
 
-  async function load() {
-    setLoading(true);
-    setError(null);
-    const url = await fetchChapterSpeech(chapterId);
-    setLoading(false);
-    if (!url) { setError("Failed to generate audio. Try again."); return; }
-    setBlobUrl(url);
+  // Cancel on unmount
+  useEffect(() => () => { window.speechSynthesis.cancel(); }, []);
+
+  function speak() {
+    window.speechSynthesis.cancel();
+    const cleaned   = cleanForSpeech(text);
+    const words     = cleaned.split(/\s+/);
+    wordCountRef.current   = words.length;
+    wordsSpokenRef.current = 0;
+
+    const u = new SpeechSynthesisUtterance(cleaned);
+    u.rate  = 0.92;   // slightly slower — memoir narration pace
+    u.pitch = 1.0;
+    const voice = pickVoice();
+    if (voice) u.voice = voice;
+
+    u.onboundary = (e) => {
+      if (e.name === "word") {
+        wordsSpokenRef.current += 1;
+        setProgress(Math.round((wordsSpokenRef.current / wordCountRef.current) * 100));
+      }
+    };
+    u.onstart = () => { setPlaying(true); setStarted(true); };
+    u.onend   = () => { setPlaying(false); setProgress(100); };
+    u.onerror = () => setPlaying(false);
+
+    window.speechSynthesis.speak(u);
   }
 
   function toggle() {
-    const a = audioRef.current;
-    if (!a) return;
-    if (playing) { a.pause(); setPlaying(false); }
-    else { a.play(); setPlaying(true); }
+    if (!started) { speak(); return; }
+    if (playing) {
+      window.speechSynthesis.pause();
+      setPlaying(false);
+    } else {
+      window.speechSynthesis.resume();
+      setPlaying(true);
+    }
   }
 
-  function seek(e: React.ChangeEvent<HTMLInputElement>) {
-    const t = Number(e.target.value);
-    if (audioRef.current) audioRef.current.currentTime = t;
-    setCurrentTime(t);
-  }
-
-  function dismiss() {
-    audioRef.current?.pause();
-    if (blobUrl) URL.revokeObjectURL(blobUrl);
-    setBlobUrl(null);
+  function stop() {
+    window.speechSynthesis.cancel();
     setPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setError(null);
+    setStarted(false);
+    setProgress(0);
   }
-
-  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  if (error) return (
-    <div className="vp-error">
-      {error}
-      <button onClick={() => setError(null)}>×</button>
-    </div>
-  );
-
-  if (!blobUrl) return (
-    <button className="btn-listen" onClick={load} disabled={loading}>
-      {loading ? (
-        <>
-          <div className="spinner" style={{ width: 11, height: 11, borderWidth: 1.5, borderTopColor: "#C084FC" }} />
-          Generating audio…
-        </>
-      ) : (
-        <>
-          <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor">
-            <path d="M0 0L11 6.5L0 13V0Z"/>
-          </svg>
-          Listen
-        </>
-      )}
-    </button>
-  );
 
   return (
     <div className="vp-player">
-      <audio
-        ref={audioRef}
-        src={blobUrl}
-        autoPlay
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
-        onEnded={() => { setPlaying(false); setCurrentTime(0); }}
-      />
-
       <button className="vp-pp" onClick={toggle}>
         {playing ? (
           <svg width="9" height="11" viewBox="0 0 9 11" fill="currentColor">
@@ -112,39 +109,36 @@ function VoicePlayer({ chapterId }: { chapterId: number }) {
         )}
       </button>
 
-      <div className="vp-label">AI Narrator</div>
+      <div className="vp-label">
+        {!started ? "AI Narrator" : playing ? "Reading…" : "Paused"}
+      </div>
 
-      <input
-        type="range"
-        className="vp-range"
-        min={0}
-        max={duration || 0}
-        step={0.1}
-        value={currentTime}
-        onChange={seek}
-        style={{ "--vp-pct": `${pct}%` } as React.CSSProperties}
-      />
+      {/* Progress bar — word boundary driven */}
+      <div className="vp-progress-track">
+        <div className="vp-progress-fill" style={{ width: `${progress}%` }} />
+      </div>
 
-      <span className="vp-time">{fmt(currentTime)} / {fmt(duration)}</span>
+      <span className="vp-pct">{started ? `${progress}%` : ""}</span>
 
-      <button className="vp-close" onClick={dismiss} title="Stop">
-        <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
-          <path d="M1 1l6 6M7 1l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+      <button className="vp-close" onClick={stop} title="Stop">
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M1 1l6 6M7 1l-6 6"/>
         </svg>
       </button>
     </div>
   );
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
 export default function ChapterViewer({
   chapterId, chapterNumber, title, text: initialText, summary, onReopen, onClose,
 }: Props) {
-  const [editing, setEditing]     = useState(false);
-  const [text, setText]           = useState(initialText);
-  const [draft, setDraft]         = useState(initialText);
-  const [saving, setSaving]       = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [showPlayer, setShowPlayer] = useState(false);
+  const [editing,     setEditing]     = useState(false);
+  const [text,        setText]        = useState(initialText);
+  const [draft,       setDraft]       = useState(initialText);
+  const [saving,      setSaving]      = useState(false);
+  const [saveError,   setSaveError]   = useState<string | null>(null);
+  const [showPlayer,  setShowPlayer]  = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { setText(initialText); setDraft(initialText); }, [initialText]);
@@ -156,6 +150,11 @@ export default function ChapterViewer({
       ta.style.height = `${ta.scrollHeight}px`;
     }
   }, [editing, draft]);
+
+  // Stop speech when player is hidden or user starts editing
+  useEffect(() => {
+    if (!showPlayer || editing) window.speechSynthesis.cancel();
+  }, [showPlayer, editing]);
 
   function startEdit() {
     setDraft(text);
@@ -183,7 +182,11 @@ export default function ChapterViewer({
   }
 
   const heading    = title ? `Chapter ${chapterNumber}: ${title}` : `Chapter ${chapterNumber}`;
-  const paragraphs = text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean).filter((p) => !/^chapter\s+\d+/i.test(p));
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .filter((p) => !/^chapter\s+\d+/i.test(p));
 
   return (
     <div className="output-view">
@@ -206,10 +209,9 @@ export default function ChapterViewer({
               <button
                 className={`btn-listen-toggle${showPlayer ? " active" : ""}`}
                 onClick={() => setShowPlayer((v) => !v)}
-                title="Listen to this chapter"
               >
-                <svg width="11" height="13" viewBox="0 0 11 13" fill="currentColor" style={{ flexShrink: 0 }}>
-                  <path d="M0 0L11 6.5L0 13V0Z"/>
+                <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor" style={{ flexShrink: 0 }}>
+                  <path d="M0 0L10 6L0 12V0Z"/>
                 </svg>
                 Listen
               </button>
@@ -221,7 +223,7 @@ export default function ChapterViewer({
 
       {showPlayer && !editing && (
         <div className="vp-bar">
-          <VoicePlayer key={chapterId} chapterId={chapterId} />
+          <VoicePlayer key={chapterId} text={text} />
         </div>
       )}
 
