@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import {
-  finishChapter, deleteChapter, reopenChapter,
+  deleteChapter, reopenChapter,
   updateChapterTitle, deleteSegment,
   pdfUrl, getChapter, type Chapter, type Segment,
 } from "../api/client";
@@ -31,27 +31,15 @@ export default function ChapterCard({
   chapter, segments, index, onChapterUpdated, onChapterDeleted, onSegmentDeleted, onViewManuscript,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [editTitle, setEditTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [deletingSegs, setDeletingSegs] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  const isGenerating = generating || chapter.status === "generating";
+  const isGenerating = chapter.status === "generating";
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const statusLabel = isGenerating ? "Writing" : chapter.status === "done" ? "Complete" : "Recording";
-
-  async function handleGenerate() {
-    setGenerating(true);
-    setError(null);
-    try {
-      const r = await finishChapter(chapter.id);
-      const full = await getChapter(chapter.id);
-      onChapterUpdated({ ...full, generated_text: r.generated_text });
-    } catch (e) { setError(String(e)); }
-    finally { setGenerating(false); }
-  }
 
   async function handleDelete() {
     if (!window.confirm(`Delete "${chapter.title || `Chapter ${chapter.number}`}"? Cannot be undone.`)) return;
@@ -219,11 +207,6 @@ export default function ChapterCard({
 
               {!isGenerating && (
                 <div className="cc-actions">
-                  {chapter.status === "recording" && segments.length > 0 && (
-                    <button className="cc-gen" onClick={handleGenerate}>
-                      ✦ Write Chapter
-                    </button>
-                  )}
                   {chapter.status === "done" && (
                     <>
                       <button className="cc-view" onClick={openAndView}>View Manuscript</button>

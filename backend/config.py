@@ -38,3 +38,6 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 JWT_SECRET       = os.getenv("JWT_SECRET", "change-this-secret-in-production")
 JWT_EXPIRE_DAYS  = int(os.getenv("JWT_EXPIRE_DAYS", "30"))
+
+# --- Admin ---
+ADMIN_EMAILS: list[str] = [e.strip() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]

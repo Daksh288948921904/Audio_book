@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.db import get_db, Chapter, AudioSegment
 from backend.services.pipeline import finish_chapter
 from backend.services.vector_store import delete_collection
-from backend.auth import get_current_user
+from backend.auth import get_current_user, require_admin
 
 router = APIRouter(prefix="/chapters", tags=["chapters"])
 
@@ -70,7 +70,7 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
 
 
 @router.post("/{chapter_id}/finish")
-def finish(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth):
+def finish(chapter_id: int, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")

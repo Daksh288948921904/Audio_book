@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.db import init_db, get_db, SessionLocal, AudioSegment, User
-from backend.routers import audio, chapters, books
+from backend.routers import audio, chapters, books, admin as admin_router
 from backend.config import CORS_ORIGINS
 from backend.auth import verify_google_token, create_app_token, get_current_user
 
@@ -84,6 +84,7 @@ app.add_middleware(
 app.include_router(books.router)
 app.include_router(audio.router)
 app.include_router(chapters.router)
+app.include_router(admin_router.router)
 
 
 class GoogleAuthBody(BaseModel):
@@ -110,7 +111,6 @@ def auth_google(body: GoogleAuthBody, db: Session = Depends(get_db)):
 
 @app.get("/auth/me")
 def auth_me(current_user: dict = Depends(get_current_user)):
-    """Return the currently authenticated user's info."""
     return current_user
 
 
