@@ -63,6 +63,7 @@ const STORIES = [
 export default function LandingPage({ onLogin }: Props) {
   const [showSignIn, setShowSignIn] = useState(false);
   const [authError, setAuthError]   = useState<string | null>(null);
+  const [adminUser, setAdminUser]   = useState<{ email: string; name: string } | null>(null);
 
   async function handleGoogleSuccess(cr: { credential?: string }) {
     if (!cr.credential) return;
@@ -70,7 +71,12 @@ export default function LandingPage({ onLogin }: Props) {
     try {
       const data = await loginWithGoogle(cr.credential);
       setAuthToken(data.token);
-      onLogin({ email: data.email, name: data.name });
+      if (data.is_admin) {
+        setShowSignIn(false);
+        setAdminUser({ email: data.email, name: data.name });
+      } else {
+        onLogin({ email: data.email, name: data.name });
+      }
     } catch {
       setAuthError("Sign-in failed. Please try again.");
     }
@@ -291,6 +297,50 @@ export default function LandingPage({ onLogin }: Props) {
           <p className="lp-footer-tagline">Your story. Your voice. Your book.</p>
         </div>
       </footer>
+
+      {/* ── Admin role picker ── */}
+      {adminUser && (
+        <div className="lp-overlay">
+          <div className="lp-signin-card">
+            <div className="lp-signin-logo">
+              <div className="lp-brand-mark" style={{ width: 48, height: 48, fontSize: 20, borderRadius: 13 }}>I</div>
+            </div>
+            <h2 className="lp-signin-title">Where to?</h2>
+            <p className="lp-signin-sub">Welcome back, {adminUser.name || adminUser.email}.</p>
+            <div className="lp-signin-rule" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+              <button
+                onClick={() => { window.location.href = "/cms"; }}
+                style={{
+                  background: "linear-gradient(135deg, #6d28d9, #8b5cf6)",
+                  color: "#fff", border: "none", borderRadius: 10,
+                  padding: "14px 20px", fontSize: 15, fontWeight: 700,
+                  cursor: "pointer", textAlign: "left",
+                }}
+              >
+                <div>⚙ Admin Panel</div>
+                <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 3 }}>
+                  Manage users, generate chapters, compile books
+                </div>
+              </button>
+              <button
+                onClick={() => onLogin(adminUser)}
+                style={{
+                  background: "rgba(255,255,255,0.06)", color: "#e4e4f0",
+                  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
+                  padding: "14px 20px", fontSize: 15, fontWeight: 700,
+                  cursor: "pointer", textAlign: "left",
+                }}
+              >
+                <div>📖 User Panel</div>
+                <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.6, marginTop: 3 }}>
+                  Record segments, view your own books
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Sign-in overlay ── */}
       {showSignIn && (

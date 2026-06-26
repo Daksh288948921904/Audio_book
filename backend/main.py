@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import init_db, get_db, SessionLocal, AudioSegment, User
 from backend.routers import audio, chapters, books, admin as admin_router
-from backend.config import CORS_ORIGINS
+from backend.config import ADMIN_EMAILS, CORS_ORIGINS
 from backend.auth import verify_google_token, create_app_token, get_current_user
 
 _FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
@@ -106,7 +106,7 @@ def auth_google(body: GoogleAuthBody, db: Session = Depends(get_db)):
     db.commit()
 
     token = create_app_token(info["sub"], info["email"], info["name"])
-    return {"token": token, "email": info["email"], "name": info["name"]}
+    return {"token": token, "email": info["email"], "name": info["name"], "is_admin": info["email"] in ADMIN_EMAILS}
 
 
 @app.get("/auth/me")

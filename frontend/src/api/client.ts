@@ -50,7 +50,7 @@ export interface Segment {
 // ── Auth ─────────────────────────────────────────────────────────────────────
 export async function loginWithGoogle(
   credential: string
-): Promise<{ token: string; email: string; name: string }> {
+): Promise<{ token: string; email: string; name: string; is_admin: boolean }> {
   const res = await fetch(`${BASE}/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
