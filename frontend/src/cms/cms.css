@@ -307,13 +307,15 @@ html, body { background: var(--bg); color: var(--text-1); font-family: -apple-sy
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
   padding: 4px 9px; border-radius: 6px; width: fit-content; margin-bottom: 10px;
 }
-.adm-badge-recording { background: rgba(239,68,68,0.18); color: #f87171; }
+.adm-badge-recording  { background: rgba(239,68,68,0.18); color: #f87171; }
 .adm-badge-generating { background: rgba(245,158,11,0.18); color: #fbbf24; }
-.adm-badge-done { background: rgba(16,185,129,0.18); color: #34d399; }
+.adm-badge-done       { background: rgba(16,185,129,0.18); color: #34d399; }
+.adm-badge-stuck      { background: rgba(249,115,22,0.18); color: #fb923c; }
 
-.pip-rec { width: 6px; height: 6px; border-radius: 50%; background: #f87171; display: inline-block; animation: blink 1s infinite; }
-.pip-gen { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; display: inline-block; }
+.pip-rec  { width: 6px; height: 6px; border-radius: 50%; background: #f87171; display: inline-block; animation: blink 1s infinite; }
+.pip-gen  { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; display: inline-block; }
 .pip-done { width: 6px; height: 6px; border-radius: 50%; background: #34d399; display: inline-block; }
+.pip-stuck { width: 6px; height: 6px; border-radius: 50%; background: #fb923c; display: inline-block; animation: blink 1.5s infinite; }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 .adm-num { font-size: 42px; font-weight: 800; opacity: 0.2; line-height: 1; margin-bottom: 4px; }

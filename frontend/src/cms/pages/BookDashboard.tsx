@@ -114,13 +114,16 @@ function ManuscriptPanel({
 
 // ── Segment audio player row ───────────────────────────────────────────────────
 function SegmentRow({ seg }: { seg: CmsSegment }) {
-  const [src, setSrc] = useState<string | null>(null);
+  const [src, setSrc]         = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);
 
   async function loadAudio() {
-    if (src || !seg.has_audio) return;
+    if (src || !seg.has_audio || loading) return;
     setLoading(true);
-    setSrc(await cmsFetchAudioBlob(seg.id));
+    setLoadErr(false);
+    const url = await cmsFetchAudioBlob(seg.id);
+    if (url) { setSrc(url); } else { setLoadErr(true); }
     setLoading(false);
   }
 
@@ -131,14 +134,23 @@ function SegmentRow({ seg }: { seg: CmsSegment }) {
         {seg.intent && <span className="cms-intent-badge">{seg.intent}</span>}
       </div>
       {seg.transcript && <div className="cms-seg-text">{seg.transcript}</div>}
-      {seg.has_audio && (
+
+      {seg.has_audio ? (
         loading ? (
           <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 6 }}>Loading audio…</div>
         ) : src ? (
           <audio src={src} controls />
+        ) : loadErr ? (
+          <div style={{ fontSize: 11, color: "#fb923c", marginTop: 6 }}>
+            Audio unavailable — file may have been cleared on server restart.
+          </div>
         ) : (
-          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Tap to load audio</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>▶ Tap to load audio</div>
         )
+      ) : (
+        <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6, fontStyle: "italic" }}>
+          No audio file (cleared after server restart)
+        </div>
       )}
     </div>
   );

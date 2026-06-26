@@ -24,15 +24,16 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
   const [writing, setWriting] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
-  const isGenerating = writing || chapter.status === "generating";
-  const gradient     = GRADIENTS[index % GRADIENTS.length];
-  const statusLabel  = isGenerating ? "Writing" : chapter.status === "done" ? "Complete" : "Recording";
+  // Distinguish: actively writing right now vs stuck from a previous failed attempt
+  const isActivelyWriting = writing;
+  const isStuck           = chapter.status === "generating" && !writing;
+  const gradient          = GRADIENTS[index % GRADIENTS.length];
 
   async function handleWrite() {
     setWriting(true);
     setError(null);
     try {
-      const r   = await cmsFinishChapter(chapter.id);
+      const r    = await cmsFinishChapter(chapter.id);
       const full = await cmsGetChapter(chapter.id);
       onUpdated({ ...full, generated_text: r.generated_text });
     } catch (e) { setError(String(e)); }
@@ -45,14 +46,27 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
     catch (e) { setError(String(e)); }
   }
 
+  function badgeClass() {
+    if (isActivelyWriting) return "adm-badge adm-badge-generating";
+    if (isStuck)           return "adm-badge adm-badge-stuck";
+    return `adm-badge adm-badge-${chapter.status}`;
+  }
+
+  function badgeLabel() {
+    if (isActivelyWriting) return "Writing";
+    if (isStuck)           return "Stuck";
+    return chapter.status === "done" ? "Complete" : "Recording";
+  }
+
   return (
     <div className="adm-card" style={{ background: gradient }}>
       <div>
-        <div className={`adm-badge adm-badge-${isGenerating ? "generating" : chapter.status}`}>
-          {chapter.status === "recording" && !isGenerating && <span className="pip-rec" />}
-          {isGenerating && <span className="pip-gen" />}
-          {chapter.status === "done" && !isGenerating && <span className="pip-done" />}
-          {statusLabel}
+        <div className={badgeClass()}>
+          {chapter.status === "recording" && !isActivelyWriting && !isStuck && <span className="pip-rec" />}
+          {isActivelyWriting && <span className="pip-gen" />}
+          {isStuck && <span className="pip-stuck" />}
+          {chapter.status === "done" && !isStuck && <span className="pip-done" />}
+          {badgeLabel()}
         </div>
 
         <div className="adm-num">{String(chapter.number).padStart(2, "0")}</div>
@@ -65,10 +79,16 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
           </div>
         )}
 
-        {isGenerating && (
+        {isActivelyWriting && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 12, color: "#fbbf24" }}>
             <div className="cms-spinner" style={{ borderTopColor: "#fbbf24", width: 12, height: 12, borderWidth: 1.5 }} />
             Writing… (20–60 s)
+          </div>
+        )}
+
+        {isStuck && (
+          <div style={{ fontSize: 11, color: "#fb923c", marginTop: 6, lineHeight: 1.45 }}>
+            Previous generation got stuck. Click Retry to try again.
           </div>
         )}
 
@@ -79,14 +99,14 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
         )}
       </div>
 
-      {!isGenerating && (
+      {!isActivelyWriting && (
         <div className="adm-actions">
-          {chapter.status === "recording" && segments.length > 0 && (
+          {(chapter.status === "recording" || isStuck) && segments.length > 0 && (
             <button className="adm-btn adm-btn-write" onClick={handleWrite} disabled={writing}>
-              ✦ Write Chapter
+              {isStuck ? "↺ Retry Write" : "✦ Write Chapter"}
             </button>
           )}
-          {chapter.status === "done" && (
+          {chapter.status === "done" && !isStuck && (
             <>
               <button className="adm-btn adm-btn-view" onClick={() => onViewManuscript(chapter)}>
                 View Manuscript
