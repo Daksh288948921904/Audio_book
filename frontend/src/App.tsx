@@ -16,6 +16,7 @@ interface AuthUser { email: string; name: string; }
 export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [adminPending, setAdminPending] = useState<AuthUser | null>(null);
 
   const [books, setBooks] = useState<Book[]>([]);
   const [activeBookId, setActiveBookId] = useState<number | null>(null);
@@ -32,7 +33,14 @@ export default function App() {
     const token = localStorage.getItem("ink_token");
     if (!token) { setAuthChecked(true); return; }
     getMe()
-      .then((u) => { setAuthUser({ email: u.email, name: u.name }); setAuthChecked(true); })
+      .then((u) => {
+        if (u.is_admin) {
+          setAdminPending({ email: u.email, name: u.name });
+        } else {
+          setAuthUser({ email: u.email, name: u.name });
+        }
+        setAuthChecked(true);
+      })
       .catch(() => { clearAuthToken(); setAuthChecked(true); });
   }, []);
 
@@ -144,6 +152,60 @@ export default function App() {
 
   // ── Show nothing while checking stored token ────────────────────────────
   if (!authChecked) return null;
+
+  // ── Admin role picker (existing session or fresh login routed here) ────
+  if (adminPending) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+        background: "#0a0a14",
+      }}>
+        <div style={{
+          background: "#13131f", border: "1px solid #2a2a42", borderRadius: 16,
+          padding: 40, width: 360, textAlign: "center",
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 13, background: "linear-gradient(135deg,#6d28d9,#8b5cf6)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, fontWeight: 800, color: "#fff", margin: "0 auto 16px",
+          }}>I</div>
+          <h2 style={{ color: "#e4e4f0", fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Where to?</h2>
+          <p style={{ color: "#9898b8", fontSize: 14, marginBottom: 24 }}>
+            Welcome back, {adminPending.name || adminPending.email}.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <button
+              onClick={() => { window.location.href = "/cms"; }}
+              style={{
+                background: "linear-gradient(135deg,#6d28d9,#8b5cf6)", color: "#fff",
+                border: "none", borderRadius: 10, padding: "14px 20px",
+                fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left",
+              }}
+            >
+              <div>⚙ Admin Panel</div>
+              <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 3 }}>
+                Manage users, generate chapters, compile books
+              </div>
+            </button>
+            <button
+              onClick={() => { setAuthUser(adminPending); setAdminPending(null); }}
+              style={{
+                background: "rgba(255,255,255,0.06)", color: "#e4e4f0",
+                border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
+                padding: "14px 20px", fontSize: 15, fontWeight: 700,
+                cursor: "pointer", textAlign: "left",
+              }}
+            >
+              <div>📖 User Panel</div>
+              <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.6, marginTop: 3 }}>
+                Record segments, view your own books
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Login gate ──────────────────────────────────────────────────────────
   if (!authUser) return <LandingPage onLogin={handleLogin} />;

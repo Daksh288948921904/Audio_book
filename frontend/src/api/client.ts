@@ -60,7 +60,7 @@ export async function loginWithGoogle(
   return res.json();
 }
 
-export async function getMe(): Promise<{ sub: string; email: string; name: string }> {
+export async function getMe(): Promise<{ sub: string; email: string; name: string; is_admin: boolean }> {
   const res = await fetch(`${BASE}/auth/me`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
