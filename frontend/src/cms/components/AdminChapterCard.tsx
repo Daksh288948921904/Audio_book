@@ -3,7 +3,6 @@ import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, cmsGenerateTts, type C
 
 const TTS_VOICES: Record<string, string[]> = {
   "canopylabs/orpheus-v1-english": ["austin", "daniel", "troy", "autumn", "diana", "hannah"],
-  "canopylabs/orpheus-arabic-saudi": ["abdullah", "fahad", "sultan", "lulwa", "noura", "aisha"],
 };
 
 const GRADIENTS = [
@@ -152,7 +151,6 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
                     onChange={(e) => handleModelChange(e.target.value)}
                   >
                     <option value="canopylabs/orpheus-v1-english">Orpheus English</option>
-                    <option value="canopylabs/orpheus-arabic-saudi">Orpheus Arabic</option>
                   </select>
                   <select
                     className="adm-select"
