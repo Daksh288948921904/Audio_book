@@ -38,6 +38,7 @@ def list_books(
         {
             "id": b.id,
             "title": b.title,
+            "genre": b.genre or "fiction",
             "created_at": b.created_at,
             "chapter_count": len(b.chapters),
             "done_count": sum(1 for c in b.chapters if c.status == "done"),
@@ -49,14 +50,17 @@ def list_books(
 @router.post("/")
 def create_book(
     title: str,
+    genre: str = "fiction",
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    book = Book(title=title, user_id=current_user["sub"])
+    if genre not in ("fiction", "memoir"):
+        genre = "fiction"
+    book = Book(title=title, genre=genre, user_id=current_user["sub"])
     db.add(book)
     db.commit()
     db.refresh(book)
-    return {"id": book.id, "title": book.title, "created_at": book.created_at, "chapter_count": 0, "done_count": 0}
+    return {"id": book.id, "title": book.title, "genre": book.genre, "created_at": book.created_at, "chapter_count": 0, "done_count": 0}
 
 
 @router.delete("/all")
@@ -145,11 +149,13 @@ def list_book_chapters(
 def create_book_chapters(
     book_id: int,
     count: int,
+    include_prologue: bool = False,
+    include_epilogue: bool = False,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    if count < 1 or count > 50:
-        raise HTTPException(status_code=400, detail="count must be 1–50")
+    if count < 0 or count > 50:
+        raise HTTPException(status_code=400, detail="count must be 0–50")
 
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
@@ -158,13 +164,22 @@ def create_book_chapters(
         raise HTTPException(status_code=403, detail="Not your book")
 
     last = db.query(Chapter).filter(Chapter.book_id == book_id).order_by(Chapter.number.desc()).first()
-    start = (last.number + 1) if last else 1
+    num = (last.number + 1) if last else 1
 
     chapters = []
-    for i in range(count):
-        ch = Chapter(book_id=book_id, number=start + i, status="recording")
-        db.add(ch)
-        chapters.append(ch)
+
+    if include_prologue:
+        ch = Chapter(book_id=book_id, number=num, title="Prologue", status="recording")
+        db.add(ch); chapters.append(ch); num += 1
+
+    for _ in range(count):
+        ch = Chapter(book_id=book_id, number=num, status="recording")
+        db.add(ch); chapters.append(ch); num += 1
+
+    if include_epilogue:
+        ch = Chapter(book_id=book_id, number=num, title="Epilogue", status="recording")
+        db.add(ch); chapters.append(ch)
+
     db.commit()
     for ch in chapters:
         db.refresh(ch)

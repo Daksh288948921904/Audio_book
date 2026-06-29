@@ -27,6 +27,7 @@ export interface CmsUser {
 export interface CmsBook {
   id: number;
   title: string;
+  genre: "fiction" | "memoir";
   chapter_count: number;
   done_count: number;
   created_at: string;

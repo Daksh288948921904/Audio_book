@@ -9,22 +9,31 @@ interface Props {
 const COUNTS = [3, 5, 8, 10, 15, 20];
 
 export default function NewBookModal({ onCreated, onClose }: Props) {
-  const [title, setTitle] = useState("");
-  const [count, setCount] = useState(5);
+  const [title, setTitle]   = useState("");
+  const [genre, setGenre]   = useState<"fiction" | "memoir">("fiction");
+  const [prologue, setPrologue] = useState(false);
+  const [epilogue, setEpilogue] = useState(false);
+  const [count, setCount]   = useState(5);
   const [custom, setCustom] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]   = useState<string | null>(null);
 
   const finalCount = custom ? Math.max(1, Math.min(50, parseInt(custom) || 1)) : count;
+
+  function selectGenre(g: "fiction" | "memoir") {
+    setGenre(g);
+    if (g === "memoir") { setPrologue(true); setEpilogue(true); }
+    else { setPrologue(false); setEpilogue(false); }
+  }
 
   async function handleCreate() {
     if (!title.trim()) { setError("Book title is required."); return; }
     setLoading(true);
     setError(null);
     try {
-      const book = await createBook(title.trim());
-      await createBookChapters(book.id, finalCount);
-      onCreated({ ...book, chapter_count: finalCount, done_count: 0 });
+      const book = await createBook(title.trim(), genre);
+      const chapters = await createBookChapters(book.id, finalCount, prologue, epilogue);
+      onCreated({ ...book, chapter_count: chapters.length, done_count: 0 });
     } catch (e) {
       setError(String(e));
     } finally {
@@ -37,6 +46,7 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
       <div className="modal-box">
         <div className="modal-title">New Book</div>
 
+        {/* Title */}
         <div className="field">
           <label>Title</label>
           <input
@@ -49,8 +59,59 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
           />
         </div>
 
+        {/* Genre */}
         <div className="field">
-          <label>Number of Chapters</label>
+          <label>Genre</label>
+          <div className="nb-genre-row">
+            <button
+              className={`nb-genre-btn ${genre === "fiction" ? "sel" : ""}`}
+              onClick={() => selectGenre("fiction")}
+            >
+              <span className="nb-genre-icon">📖</span>
+              <span className="nb-genre-name">Fiction</span>
+              <span className="nb-genre-hint">Numbered chapters, optional prologue & epilogue</span>
+            </button>
+            <button
+              className={`nb-genre-btn ${genre === "memoir" ? "sel" : ""}`}
+              onClick={() => selectGenre("memoir")}
+            >
+              <span className="nb-genre-icon">✍</span>
+              <span className="nb-genre-name">Memoir</span>
+              <span className="nb-genre-hint">Titled chapters with emotional weight, prologue & epilogue</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Structure */}
+        <div className="field">
+          <label>Structure</label>
+          <div className="nb-structure-row">
+            <label className="nb-check">
+              <input type="checkbox" checked={prologue} onChange={(e) => setPrologue(e.target.checked)} />
+              <span className="nb-check-box" />
+              <span className="nb-check-label">
+                <span className="nb-check-name">Prologue</span>
+                <span className="nb-check-desc">
+                  {genre === "memoir" ? "Dramatic hook before chronology" : "World-building or flash-forward"}
+                </span>
+              </span>
+            </label>
+            <label className="nb-check">
+              <input type="checkbox" checked={epilogue} onChange={(e) => setEpilogue(e.target.checked)} />
+              <span className="nb-check-box" />
+              <span className="nb-check-label">
+                <span className="nb-check-name">Epilogue</span>
+                <span className="nb-check-desc">
+                  {genre === "memoir" ? "Where you are now — closure" : "Aftermath after the climax"}
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {/* Chapter count */}
+        <div className="field">
+          <label>Main Chapters</label>
           <div className="count-row">
             {COUNTS.map((n) => (
               <button
@@ -74,6 +135,12 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
               style={{ width: 80, textAlign: "center" }}
             />
           </div>
+          {(prologue || epilogue) && (
+            <div style={{ fontSize: 11, color: "var(--text-2)", marginTop: 6 }}>
+              Total: {finalCount + (prologue ? 1 : 0) + (epilogue ? 1 : 0)} chapters
+              {prologue ? " (incl. Prologue)" : ""}{epilogue ? " (incl. Epilogue)" : ""}
+            </div>
+          )}
         </div>
 
         {error && (
@@ -91,7 +158,7 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
                 <span className="spinner" style={{ borderTopColor: "#fff" }} />
                 Creating…
               </span>
-            ) : `Create ${finalCount} Chapters →`}
+            ) : `Create Book →`}
           </button>
         </div>
       </div>

@@ -1769,6 +1769,51 @@ html, body, #root {
 .btn-launch:hover { opacity: 0.85; }
 .btn-launch:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Genre picker */
+.nb-genre-row { display: flex; gap: 8px; }
+.nb-genre-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 12px 13px; border-radius: var(--r); cursor: pointer; text-align: left;
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  transition: border-color .15s, background .15s;
+}
+.nb-genre-btn:hover { border-color: var(--border-3); background: var(--surface-3); }
+.nb-genre-btn.sel { background: var(--blue-dim); border-color: rgba(91,141,239,0.4); }
+.nb-genre-icon { font-size: 16px; line-height: 1; }
+.nb-genre-name { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--font); }
+.nb-genre-hint { font-size: 10.5px; color: var(--text-2); line-height: 1.4; font-family: var(--font); }
+.nb-genre-btn.sel .nb-genre-name { color: var(--blue-2); }
+
+/* Structure checkboxes */
+.nb-structure-row { display: flex; flex-direction: column; gap: 8px; }
+.nb-check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.nb-check input[type="checkbox"] { display: none; }
+.nb-check-box {
+  width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; margin-top: 1px;
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  transition: background .12s, border-color .12s;
+  display: flex; align-items: center; justify-content: center;
+}
+.nb-check input:checked + .nb-check-box {
+  background: var(--blue); border-color: var(--blue);
+}
+.nb-check input:checked + .nb-check-box::after {
+  content: ""; display: block; width: 4px; height: 7px;
+  border-right: 2px solid #fff; border-bottom: 2px solid #fff;
+  transform: rotate(45deg) translateY(-1px);
+}
+.nb-check-label { display: flex; flex-direction: column; gap: 1px; }
+.nb-check-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.nb-check-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
+
+/* Genre badge in sidebar */
+.book-genre-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  padding: 2px 5px; border-radius: 4px; flex-shrink: 0;
+  background: rgba(255,255,255,0.06); color: var(--text-2);
+}
+.book-item.active .book-genre-badge { background: rgba(91,141,239,0.2); color: var(--blue-2); }
+
 /* ═══════════════════════════════════════════════════
    CHAPTER VIEWER  (.output-view / .manuscript-*)
    ═══════════════════════════════════════════════════ */

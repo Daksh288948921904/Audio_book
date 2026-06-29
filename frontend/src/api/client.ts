@@ -21,6 +21,7 @@ function authHeaders(): Record<string, string> {
 export interface Book {
   id: number;
   title: string;
+  genre: "fiction" | "memoir";
   created_at: string;
   chapter_count: number;
   done_count: number;
@@ -73,8 +74,8 @@ export async function listBooks(): Promise<Book[]> {
   return res.json();
 }
 
-export async function createBook(title: string): Promise<Book> {
-  const res = await fetch(`${BASE}/books/?title=${encodeURIComponent(title)}`, {
+export async function createBook(title: string, genre: "fiction" | "memoir" = "fiction"): Promise<Book> {
+  const res = await fetch(`${BASE}/books/?title=${encodeURIComponent(title)}&genre=${genre}`, {
     method: "POST",
     headers: authHeaders(),
   });
@@ -104,8 +105,16 @@ export async function listBookChapters(bookId: number): Promise<Chapter[]> {
   return res.json();
 }
 
-export async function createBookChapters(bookId: number, count: number): Promise<Chapter[]> {
-  const res = await fetch(`${BASE}/books/${bookId}/chapters?count=${count}`, {
+export async function createBookChapters(
+  bookId: number,
+  count: number,
+  includePrologue = false,
+  includeEpilogue = false,
+): Promise<Chapter[]> {
+  const params = new URLSearchParams({ count: String(count) });
+  if (includePrologue) params.set("include_prologue", "true");
+  if (includeEpilogue) params.set("include_epilogue", "true");
+  const res = await fetch(`${BASE}/books/${bookId}/chapters?${params}`, {
     method: "POST",
     headers: authHeaders(),
   });

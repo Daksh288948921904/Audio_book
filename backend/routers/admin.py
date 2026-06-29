@@ -106,6 +106,7 @@ def list_user_books(google_id: str, db: Session = Depends(get_db), _: dict = _ad
         {
             "id":            b.id,
             "title":         b.title,
+            "genre":         b.genre or "fiction",
             "created_at":    b.created_at,
             "chapter_count": len(b.chapters),
             "done_count":    sum(1 for c in b.chapters if c.status == "done"),

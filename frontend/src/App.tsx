@@ -246,8 +246,9 @@ export default function App() {
                 style={{ animationDelay: `${i * 50}ms` }}
                 onClick={() => handleSelectBook(b.id)}
               >
-                <span className="book-icon">📖</span>
+                <span className="book-icon">{b.genre === "memoir" ? "✍" : "📖"}</span>
                 <span className="book-name">{b.title}</span>
+                <span className="book-genre-badge">{b.genre === "memoir" ? "Memoir" : "Fiction"}</span>
                 <span className="book-count">{b.chapter_count}</span>
               </button>
             ))

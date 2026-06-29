@@ -263,7 +263,18 @@ export default function BookDashboard({ user, book }: Props) {
     <>
       <div className="cms-section-head">
         <div>
-          <div className="cms-section-title">{book.title}</div>
+          <div className="cms-section-title">
+            {book.title}
+            <span style={{
+              marginLeft: 10, fontSize: 11, fontWeight: 600, textTransform: "uppercase",
+              letterSpacing: "0.5px", padding: "2px 7px", borderRadius: 5,
+              background: book.genre === "memoir" ? "rgba(139,92,246,0.15)" : "rgba(59,130,246,0.12)",
+              color: book.genre === "memoir" ? "#a78bfa" : "#93c5fd",
+              verticalAlign: "middle",
+            }}>
+              {book.genre === "memoir" ? "Memoir" : "Fiction"}
+            </span>
+          </div>
           <div className="cms-section-meta" style={{ marginTop: 2 }}>
             {user.name ?? user.email}
           </div>

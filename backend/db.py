@@ -29,6 +29,7 @@ class Book(Base):
 
     id         = Column(Integer, primary_key=True, index=True)
     title      = Column(String, nullable=False)
+    genre      = Column(String, nullable=True, default="fiction")  # "fiction" | "memoir"
     user_id    = Column(String, nullable=True, index=True)  # Google sub
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -73,6 +74,9 @@ def _sqlite_migrate():
         book_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(books)")).fetchall()]
         if "user_id" not in book_cols:
             conn.execute(text("ALTER TABLE books ADD COLUMN user_id VARCHAR"))
+            conn.commit()
+        if "genre" not in book_cols:
+            conn.execute(text("ALTER TABLE books ADD COLUMN genre VARCHAR DEFAULT 'fiction'"))
             conn.commit()
 
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(chapters)")).fetchall()]
@@ -129,6 +133,9 @@ def _postgres_migrate():
     with engine.connect() as conn:
         conn.execute(text(
             "ALTER TABLE audio_segments ADD COLUMN IF NOT EXISTS file_expires_at TIMESTAMP WITH TIME ZONE"
+        ))
+        conn.execute(text(
+            "ALTER TABLE books ADD COLUMN IF NOT EXISTS genre VARCHAR DEFAULT 'fiction'"
         ))
         conn.commit()
 
