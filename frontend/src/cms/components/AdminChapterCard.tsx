@@ -1,9 +1,5 @@
-import { useState } from "react";
-import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, cmsGenerateTts, type CmsChapter, type CmsSegment } from "../api/adminClient";
-
-const TTS_VOICES: Record<string, string[]> = {
-  "canopylabs/orpheus-v1-english": ["austin", "daniel", "troy", "autumn", "diana", "hannah"],
-};
+import { useEffect, useRef, useState } from "react";
+import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, type CmsChapter, type CmsSegment } from "../api/adminClient";
 
 const GRADIENTS = [
   "linear-gradient(145deg, #0f1f3d 0%, #1a3a6b 55%, #2a4f8f 100%)",
@@ -25,15 +21,34 @@ interface Props {
 }
 
 export default function AdminChapterCard({ chapter, segments, index, onUpdated, onViewManuscript }: Props) {
-  const [writing, setWriting]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
-  const [ttsModel, setTtsModel]   = useState("canopylabs/orpheus-v1-english");
-  const [ttsVoice, setTtsVoice]   = useState("austin");
-  const [ttsUrl, setTtsUrl]       = useState<string | null>(null);
-  const [ttsLoading, setTtsLoading] = useState(false);
-  const [ttsError, setTtsError]   = useState<string | null>(null);
+  const [writing, setWriting] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
 
-  // Distinguish: actively writing right now vs stuck from a previous failed attempt
+  // TTS state — browser Web Speech API
+  const [voices, setVoices]       = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceName, setVoiceName] = useState("");
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [ttsPaused, setTtsPaused]   = useState(false);
+  const keepAliveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    function load() {
+      const v = window.speechSynthesis.getVoices();
+      if (v.length === 0) return;
+      setVoices(v);
+      // prefer an English voice as default
+      const eng = v.find((x) => x.lang.startsWith("en")) ?? v[0];
+      setVoiceName((prev) => prev || eng.name);
+    }
+    load();
+    window.speechSynthesis.addEventListener("voiceschanged", load);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", load);
+      window.speechSynthesis.cancel();
+      if (keepAliveRef.current) clearTimeout(keepAliveRef.current);
+    };
+  }, []);
+
   const isActivelyWriting = writing;
   const isStuck           = chapter.status === "generating" && !writing;
   const gradient          = GRADIENTS[index % GRADIENTS.length];
@@ -49,27 +64,44 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
     finally { setWriting(false); }
   }
 
-  function handleModelChange(m: string) {
-    setTtsModel(m);
-    setTtsVoice(TTS_VOICES[m][0]);
-    setTtsUrl(null);
-  }
-
-  async function handleGenerateTts(e: React.MouseEvent) {
-    e.stopPropagation();
-    setTtsLoading(true);
-    setTtsError(null);
-    try {
-      const url = await cmsGenerateTts(chapter.id, ttsModel, ttsVoice);
-      setTtsUrl(url);
-    } catch (e) { setTtsError(String(e)); }
-    finally { setTtsLoading(false); }
-  }
-
   async function handlePdf(e: React.MouseEvent) {
     e.stopPropagation();
     try { await cmsDownloadPdf(chapter.id, chapter.number); }
     catch (e) { setError(String(e)); }
+  }
+
+  function startTts() {
+    if (!chapter.generated_text) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(chapter.generated_text);
+    const chosen = voices.find((v) => v.name === voiceName);
+    if (chosen) utt.voice = chosen;
+
+    // Chrome pauses after ~15 s on long texts — keepalive workaround
+    function keepAlive() {
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+      keepAliveRef.current = setTimeout(keepAlive, 10_000);
+    }
+
+    utt.onstart = () => { setTtsPlaying(true); setTtsPaused(false); keepAlive(); };
+    utt.onend   = () => { setTtsPlaying(false); setTtsPaused(false); if (keepAliveRef.current) clearTimeout(keepAliveRef.current); };
+    utt.onerror = () => { setTtsPlaying(false); setTtsPaused(false); if (keepAliveRef.current) clearTimeout(keepAliveRef.current); };
+    window.speechSynthesis.speak(utt);
+  }
+
+  function togglePause() {
+    if (ttsPaused) { window.speechSynthesis.resume(); setTtsPaused(false); }
+    else           { window.speechSynthesis.pause();  setTtsPaused(true);  }
+  }
+
+  function stopTts() {
+    window.speechSynthesis.cancel();
+    setTtsPlaying(false);
+    setTtsPaused(false);
+    if (keepAliveRef.current) clearTimeout(keepAliveRef.current);
   }
 
   function badgeClass() {
@@ -141,48 +173,34 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
                 ↓ PDF
               </button>
 
-              {/* TTS section */}
+              {/* TTS — browser Web Speech API */}
               <div className="adm-tts">
-                <div className="adm-tts-label">Text to Speech</div>
-                <div className="adm-tts-row">
+                <div className="adm-tts-label">Read Aloud</div>
+                {voices.length > 0 && (
                   <select
                     className="adm-select"
-                    value={ttsModel}
-                    onChange={(e) => handleModelChange(e.target.value)}
+                    value={voiceName}
+                    onChange={(e) => setVoiceName(e.target.value)}
+                    disabled={ttsPlaying}
                   >
-                    <option value="canopylabs/orpheus-v1-english">Orpheus English</option>
-                  </select>
-                  <select
-                    className="adm-select"
-                    value={ttsVoice}
-                    onChange={(e) => setTtsVoice(e.target.value)}
-                  >
-                    {TTS_VOICES[ttsModel].map((v) => (
-                      <option key={v} value={v}>{v}</option>
+                    {voices.map((v) => (
+                      <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
                     ))}
                   </select>
-                </div>
-                <button
-                  className="adm-btn adm-btn-tts"
-                  onClick={handleGenerateTts}
-                  disabled={ttsLoading}
-                >
-                  {ttsLoading
-                    ? <><div className="cms-spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} /> Generating…</>
-                    : "▶ Generate Audio"}
-                </button>
-                {ttsError && (
-                  <div style={{ fontSize: 11, color: "#fb7185", marginTop: 6, lineHeight: 1.4 }}>
-                    {ttsError}
-                  </div>
                 )}
-                {ttsUrl && (
-                  <audio
-                    key={ttsUrl}
-                    src={ttsUrl}
-                    controls
-                    style={{ width: "100%", marginTop: 8, borderRadius: 6, height: 32 }}
-                  />
+                {!ttsPlaying ? (
+                  <button className="adm-btn adm-btn-tts" onClick={startTts}>
+                    ▶ Read Chapter
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="adm-btn adm-btn-tts" style={{ flex: 1 }} onClick={togglePause}>
+                      {ttsPaused ? "▶ Resume" : "⏸ Pause"}
+                    </button>
+                    <button className="adm-btn adm-btn-view" style={{ flex: 1 }} onClick={stopTts}>
+                      ■ Stop
+                    </button>
+                  </div>
                 )}
               </div>
             </>
