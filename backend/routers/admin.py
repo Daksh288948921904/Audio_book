@@ -27,6 +27,11 @@ class TextUpdate(BaseModel):
     text: str
 
 
+class TtsRequest(BaseModel):
+    model: str = "playai-tts"
+    voice: str = "Fritz-PlayAI"
+
+
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _: dict = _admin):
     users = db.query(User).order_by(User.created_at).all()
@@ -153,6 +158,23 @@ def download_pdf(chapter_id: int, db: Session = Depends(get_db), _: dict = _admi
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/chapters/{chapter_id}/tts")
+def generate_tts(chapter_id: int, body: TtsRequest, db: Session = Depends(get_db), _: dict = _admin):
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    if chapter.status != "done" or not chapter.generated_text:
+        raise HTTPException(status_code=400, detail="Chapter text not available")
+    from backend.services.groq_pool import pool
+    audio_bytes = pool.speech(chapter.generated_text, model=body.model, voice=body.voice)
+    filename = f"chapter_{chapter.number}.wav"
+    return Response(
+        content=audio_bytes,
+        media_type="audio/wav",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

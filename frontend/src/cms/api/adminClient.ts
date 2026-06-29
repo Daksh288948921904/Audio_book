@@ -114,6 +114,16 @@ export async function cmsUpdateChapterText(chapterId: number, text: string): Pro
   });
 }
 
+export async function cmsGenerateTts(chapterId: number, model: string, voice: string): Promise<string> {
+  const res = await apiFetch(`/admin/chapters/${chapterId}/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, voice }),
+  });
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 export async function cmsDownloadPdf(chapterId: number, chapterNumber: number): Promise<void> {
   const res = await apiFetch(`/admin/chapters/${chapterId}/pdf`);
   const blob = await res.blob();

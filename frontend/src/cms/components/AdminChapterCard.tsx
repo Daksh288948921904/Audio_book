@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, type CmsChapter, type CmsSegment } from "../api/adminClient";
+import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, cmsGenerateTts, type CmsChapter, type CmsSegment } from "../api/adminClient";
+
+const TTS_VOICES: Record<string, string[]> = {
+  "playai-tts": [
+    "Aria", "Atlas", "Basil", "Briggs", "Calum", "Celeste", "Cheyenne", "Coleman",
+    "Deedee", "Eleanor", "Elizabeth", "Grace", "Grant", "Hudson", "Julia", "Kit",
+    "Mamaw", "Mason", "Mikail", "Mitch", "Nia", "Quinn", "Spencer", "Thunder",
+    "Valeria", "Fritz-PlayAI", "Chip-PlayAI",
+  ],
+  "playai-tts-arabic": ["Amira", "Ahmad"],
+};
 
 const GRADIENTS = [
   "linear-gradient(145deg, #0f1f3d 0%, #1a3a6b 55%, #2a4f8f 100%)",
@@ -21,8 +31,13 @@ interface Props {
 }
 
 export default function AdminChapterCard({ chapter, segments, index, onUpdated, onViewManuscript }: Props) {
-  const [writing, setWriting] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [writing, setWriting]     = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [ttsModel, setTtsModel]   = useState("playai-tts");
+  const [ttsVoice, setTtsVoice]   = useState("Fritz-PlayAI");
+  const [ttsUrl, setTtsUrl]       = useState<string | null>(null);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [ttsError, setTtsError]   = useState<string | null>(null);
 
   // Distinguish: actively writing right now vs stuck from a previous failed attempt
   const isActivelyWriting = writing;
@@ -38,6 +53,23 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
       onUpdated({ ...full, generated_text: r.generated_text });
     } catch (e) { setError(String(e)); }
     finally { setWriting(false); }
+  }
+
+  function handleModelChange(m: string) {
+    setTtsModel(m);
+    setTtsVoice(TTS_VOICES[m][0]);
+    setTtsUrl(null);
+  }
+
+  async function handleGenerateTts(e: React.MouseEvent) {
+    e.stopPropagation();
+    setTtsLoading(true);
+    setTtsError(null);
+    try {
+      const url = await cmsGenerateTts(chapter.id, ttsModel, ttsVoice);
+      setTtsUrl(url);
+    } catch (e) { setTtsError(String(e)); }
+    finally { setTtsLoading(false); }
   }
 
   async function handlePdf(e: React.MouseEvent) {
@@ -114,6 +146,52 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
               <button className="adm-btn adm-btn-pdf" onClick={handlePdf}>
                 ↓ PDF
               </button>
+
+              {/* TTS section */}
+              <div className="adm-tts">
+                <div className="adm-tts-label">Text to Speech</div>
+                <div className="adm-tts-row">
+                  <select
+                    className="adm-select"
+                    value={ttsModel}
+                    onChange={(e) => handleModelChange(e.target.value)}
+                  >
+                    <option value="playai-tts">PlayAI TTS</option>
+                    <option value="playai-tts-arabic">PlayAI Arabic</option>
+                  </select>
+                  <select
+                    className="adm-select"
+                    value={ttsVoice}
+                    onChange={(e) => setTtsVoice(e.target.value)}
+                  >
+                    {TTS_VOICES[ttsModel].map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  className="adm-btn adm-btn-tts"
+                  onClick={handleGenerateTts}
+                  disabled={ttsLoading}
+                >
+                  {ttsLoading
+                    ? <><div className="cms-spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} /> Generating…</>
+                    : "▶ Generate Audio"}
+                </button>
+                {ttsError && (
+                  <div style={{ fontSize: 11, color: "#fb7185", marginTop: 6, lineHeight: 1.4 }}>
+                    {ttsError}
+                  </div>
+                )}
+                {ttsUrl && (
+                  <audio
+                    key={ttsUrl}
+                    src={ttsUrl}
+                    controls
+                    style={{ width: "100%", marginTop: 8, borderRadius: 6, height: 32 }}
+                  />
+                )}
+              </div>
             </>
           )}
         </div>

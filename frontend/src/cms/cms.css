@@ -335,6 +335,17 @@ html, body { background: var(--bg); color: var(--text-1); font-family: -apple-sy
 .adm-btn-write { background: rgba(139,92,246,0.9); color: #fff; }
 .adm-btn-view  { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.85); }
 .adm-btn-pdf   { background: rgba(59,130,246,0.15); color: #93c5fd; }
+.adm-btn-tts   { background: rgba(16,185,129,0.15); color: #34d399; }
+
+.adm-tts { margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.adm-tts-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.3); }
+.adm-tts-row { display: flex; gap: 6px; }
+.adm-select {
+  flex: 1; min-width: 0; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px; color: rgba(255,255,255,0.75); font-size: 11px; padding: 5px 7px;
+  cursor: pointer; appearance: none;
+}
+.adm-select:focus { outline: none; border-color: rgba(139,92,246,0.5); }
 
 /* ── Compile results ──────────────────────────────────────────────────────────── */
 .cms-compile-results {
