@@ -1,4 +1,7 @@
+import io
 import os
+import re
+import wave
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -30,6 +33,48 @@ class TextUpdate(BaseModel):
 class TtsRequest(BaseModel):
     model: str = "canopylabs/orpheus-v1-english"
     voice: str = "austin"
+
+
+def _split_text(text: str, max_chars: int = 190) -> list[str]:
+    """Split text into chunks at sentence boundaries, staying under max_chars."""
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    chunks: list[str] = []
+    current = ""
+    for sentence in sentences:
+        if len(sentence) > max_chars:
+            # Oversized sentence — split at word boundaries
+            for word in sentence.split():
+                if not current:
+                    current = word
+                elif len(current) + 1 + len(word) <= max_chars:
+                    current += " " + word
+                else:
+                    chunks.append(current)
+                    current = word
+        elif not current:
+            current = sentence
+        elif len(current) + 1 + len(sentence) <= max_chars:
+            current += " " + sentence
+        else:
+            chunks.append(current)
+            current = sentence
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _concat_wavs(wav_bytes_list: list[bytes]) -> bytes:
+    """Concatenate a list of WAV byte strings into a single WAV."""
+    if len(wav_bytes_list) == 1:
+        return wav_bytes_list[0]
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as out:
+        for i, raw in enumerate(wav_bytes_list):
+            with wave.open(io.BytesIO(raw), "rb") as src:
+                if i == 0:
+                    out.setparams(src.getparams())
+                out.writeframes(src.readframes(src.getnframes()))
+    return buf.getvalue()
 
 
 @router.get("/users")
@@ -167,10 +212,13 @@ def generate_tts(chapter_id: int, body: TtsRequest, db: Session = Depends(get_db
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
-    if chapter.status != "done" or not chapter.generated_text:
+    text = (chapter.generated_text or "").strip()
+    if not text:
         raise HTTPException(status_code=400, detail="Chapter text not available")
     from backend.services.groq_pool import pool
-    audio_bytes = pool.speech(chapter.generated_text, model=body.model, voice=body.voice)
+    chunks = _split_text(text)
+    wav_parts = [pool.speech(chunk, model=body.model, voice=body.voice) for chunk in chunks]
+    audio_bytes = _concat_wavs(wav_parts)
     filename = f"chapter_{chapter.number}.wav"
     return Response(
         content=audio_bytes,
