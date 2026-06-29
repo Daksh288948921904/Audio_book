@@ -43,7 +43,7 @@ class GroqPool:
                     raise
         raise RuntimeError("All Groq API keys exhausted on chat request")
 
-    def speech(self, text: str, model: str = "playai-tts", voice: str = "Fritz-PlayAI") -> bytes:
+    def speech(self, text: str, model: str = "canopylabs/orpheus-v1-english", voice: str = "austin") -> bytes:
         """Return raw WAV bytes for the given text."""
         for _ in range(len(self._keys)):
             try:

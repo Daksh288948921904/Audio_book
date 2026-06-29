@@ -2,13 +2,8 @@ import { useState } from "react";
 import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, cmsGenerateTts, type CmsChapter, type CmsSegment } from "../api/adminClient";
 
 const TTS_VOICES: Record<string, string[]> = {
-  "playai-tts": [
-    "Aria", "Atlas", "Basil", "Briggs", "Calum", "Celeste", "Cheyenne", "Coleman",
-    "Deedee", "Eleanor", "Elizabeth", "Grace", "Grant", "Hudson", "Julia", "Kit",
-    "Mamaw", "Mason", "Mikail", "Mitch", "Nia", "Quinn", "Spencer", "Thunder",
-    "Valeria", "Fritz-PlayAI", "Chip-PlayAI",
-  ],
-  "playai-tts-arabic": ["Amira", "Ahmad"],
+  "canopylabs/orpheus-v1-english": ["austin", "daniel", "troy", "autumn", "diana", "hannah"],
+  "canopylabs/orpheus-arabic-saudi": ["abdullah", "fahad", "sultan", "lulwa", "noura", "aisha"],
 };
 
 const GRADIENTS = [
@@ -33,8 +28,8 @@ interface Props {
 export default function AdminChapterCard({ chapter, segments, index, onUpdated, onViewManuscript }: Props) {
   const [writing, setWriting]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
-  const [ttsModel, setTtsModel]   = useState("playai-tts");
-  const [ttsVoice, setTtsVoice]   = useState("Fritz-PlayAI");
+  const [ttsModel, setTtsModel]   = useState("canopylabs/orpheus-v1-english");
+  const [ttsVoice, setTtsVoice]   = useState("austin");
   const [ttsUrl, setTtsUrl]       = useState<string | null>(null);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsError, setTtsError]   = useState<string | null>(null);
@@ -156,8 +151,8 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
                     value={ttsModel}
                     onChange={(e) => handleModelChange(e.target.value)}
                   >
-                    <option value="playai-tts">PlayAI TTS</option>
-                    <option value="playai-tts-arabic">PlayAI Arabic</option>
+                    <option value="canopylabs/orpheus-v1-english">Orpheus English</option>
+                    <option value="canopylabs/orpheus-arabic-saudi">Orpheus Arabic</option>
                   </select>
                   <select
                     className="adm-select"

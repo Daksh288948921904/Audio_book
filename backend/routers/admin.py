@@ -28,8 +28,8 @@ class TextUpdate(BaseModel):
 
 
 class TtsRequest(BaseModel):
-    model: str = "playai-tts"
-    voice: str = "Fritz-PlayAI"
+    model: str = "canopylabs/orpheus-v1-english"
+    voice: str = "austin"
 
 
 @router.get("/users")
