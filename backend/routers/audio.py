@@ -1,11 +1,12 @@
 import os
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from backend.db import get_db, AudioSegment, Chapter
 from backend.services.pipeline import process_audio_segment
 from backend.services.vector_store import delete_chunk_by_segment
+from backend.services import storage
 from backend.config import UPLOAD_DIR
 from backend.auth import get_current_user
 
@@ -32,11 +33,16 @@ async def upload_audio(
     existing_count = db.query(AudioSegment).filter(AudioSegment.chapter_id == chapter_id).count()
     order_index = existing_count + 1
 
-    filename = f"ch{chapter_id}_seg{order_index}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, filename)
+    object_name = f"ch{chapter_id}_seg{order_index}_{file.filename}"
     content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+
+    if storage.enabled():
+        content_type = file.content_type or "audio/webm"
+        file_path = storage.upload(object_name, content, content_type)
+    else:
+        file_path = os.path.join(UPLOAD_DIR, object_name)
+        with open(file_path, "wb") as f:
+            f.write(content)
 
     segment = process_audio_segment(db, chapter_id, file_path, order_index)
 
@@ -61,8 +67,11 @@ def delete_segment(segment_id: int, db: Session = Depends(get_db), _: dict = _au
 
     delete_chunk_by_segment(chapter.number, segment_id)
 
-    if os.path.exists(segment.filename):
-        os.remove(segment.filename)
+    if segment.filename:
+        if storage.is_remote(segment.filename):
+            storage.delete(storage.path_from_url(segment.filename))
+        elif os.path.exists(segment.filename):
+            os.remove(segment.filename)
 
     db.delete(segment)
     db.commit()
@@ -99,7 +108,11 @@ def get_audio_file(segment_id: int, db: Session = Depends(get_db), _: dict = _au
     segment = db.query(AudioSegment).filter(AudioSegment.id == segment_id).first()
     if not segment:
         raise HTTPException(status_code=404, detail="Segment not found")
-    if not segment.filename or not os.path.exists(segment.filename):
+    if not segment.filename:
+        raise HTTPException(status_code=410, detail="Audio file has expired or been deleted")
+    if storage.is_remote(segment.filename):
+        return RedirectResponse(segment.filename)
+    if not os.path.exists(segment.filename):
         raise HTTPException(status_code=410, detail="Audio file has expired or been deleted")
     ext = os.path.splitext(segment.filename)[1].lower()
     media_type = _AUDIO_MIME.get(ext, "audio/webm")

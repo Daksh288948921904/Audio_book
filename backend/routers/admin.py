@@ -3,7 +3,7 @@ import os
 import re
 import wave
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from backend.db import get_db, User, Book, Chapter, AudioSegment
 from backend.auth import require_admin
 from backend.services.pipeline import finish_chapter
 from backend.services.pdf import generate_pdf
+from backend.services import storage
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -256,7 +257,7 @@ def get_segments(chapter_id: int, db: Session = Depends(get_db), _: dict = _admi
             "transcript":  s.transcript,
             "intent":      s.intent,
             "filename":    s.filename,
-            "has_audio":   bool(s.filename and os.path.exists(s.filename)),
+            "has_audio":   bool(s.filename and (storage.is_remote(s.filename) or os.path.exists(s.filename))),
         }
         for s in segments
     ]
@@ -267,7 +268,11 @@ def get_audio_file(segment_id: int, db: Session = Depends(get_db), _: dict = _ad
     segment = db.query(AudioSegment).filter(AudioSegment.id == segment_id).first()
     if not segment:
         raise HTTPException(status_code=404, detail="Segment not found")
-    if not segment.filename or not os.path.exists(segment.filename):
+    if not segment.filename:
+        raise HTTPException(status_code=410, detail="Audio file has expired or been deleted")
+    if storage.is_remote(segment.filename):
+        return RedirectResponse(segment.filename)
+    if not os.path.exists(segment.filename):
         raise HTTPException(status_code=410, detail="Audio file has expired or been deleted")
     ext = os.path.splitext(segment.filename)[1].lower()
     media_type = _AUDIO_MIME.get(ext, "audio/webm")
