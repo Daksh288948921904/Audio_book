@@ -6,15 +6,23 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 BUCKET = "Audio_files"
 
 def _headers() -> dict:
-    return {"Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"}
+    return {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "apikey": SUPABASE_SERVICE_KEY,
+    }
 
 def enabled() -> bool:
     return bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
 
 def upload(object_path: str, content: bytes, content_type: str) -> str:
     url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{object_path}"
-    r = requests.post(url, data=content, headers={**_headers(), "Content-Type": content_type})
-    r.raise_for_status()
+    r = requests.post(url, data=content, headers={
+        **_headers(),
+        "Content-Type": content_type,
+        "x-upsert": "true",
+    })
+    if not r.ok:
+        raise Exception(f"Supabase Storage upload failed {r.status_code}: {r.text}")
     return public_url(object_path)
 
 def delete(object_path: str) -> None:
