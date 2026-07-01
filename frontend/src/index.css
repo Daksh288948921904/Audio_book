@@ -1199,8 +1199,10 @@ html, body, #root {
   border: 1px solid var(--border-3);
   border-radius: var(--r-xl);
   width: 100%;
-  max-width: 480px;
-  padding: 24px;
+  max-width: 520px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 32px 80px rgba(0,0,0,0.6);
   animation: scaleIn .2s both;
 }
@@ -1209,7 +1211,9 @@ html, body, #root {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  padding: 20px 20px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
 }
 .assign-title {
   font-size: 17px;
@@ -1236,18 +1240,21 @@ html, body, #root {
 }
 .assign-close:hover { background: rgba(255,255,255,0.14); }
 
+.assign-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}
 .assign-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
 }
 .assign-ch {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px 12px;
+  gap: 3px;
+  padding: 10px 10px;
   border-radius: var(--r-lg);
   background: var(--surface-2);
   border: 1px solid var(--border-2);
@@ -1262,21 +1269,21 @@ html, body, #root {
   transform: translateY(-1px);
 }
 .assign-ch:disabled { opacity: 0.45; cursor: not-allowed; }
-.assign-ch-n { font-size: 22px; font-weight: 800; color: var(--text-2); line-height: 1; }
-.assign-ch-icon { font-size: 22px; line-height: 1; }
-.assign-ch-name { font-size: 11.5px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.assign-ch-s { font-size: 10px; color: var(--text-2); margin-top: 2px; }
-.assign-groups { display: flex; flex-direction: column; gap: 16px; }
+.assign-ch-n { font-size: 18px; font-weight: 800; color: var(--text-2); line-height: 1; }
+.assign-ch-icon { font-size: 18px; line-height: 1; }
+.assign-ch-name { font-size: 11px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assign-ch-s { font-size: 10px; color: var(--text-2); margin-top: 1px; }
+.assign-groups { display: flex; flex-direction: column; gap: 14px; }
 .assign-group-label {
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px;
-  color: var(--text-3); margin-bottom: 6px;
+  color: var(--text-3); margin-bottom: 5px;
 }
 
 .assign-uploading {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 24px 0;
+  padding: 32px 0;
   font-size: 13px;
   color: var(--text-2);
   justify-content: center;

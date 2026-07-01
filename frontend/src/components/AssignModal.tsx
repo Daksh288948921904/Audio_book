@@ -115,18 +115,20 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
           )}
         </div>
 
-        {uploading ? (
-          <div className="assign-uploading">
-            <div className="spinner" />
-            <span>Processing your recording for {uploadingLabel}…</span>
-          </div>
-        ) : (
-          <div className="assign-groups">
-            {renderGroup(frontMatter, "Front Matter")}
-            {renderGroup(mainChapters, "Chapters")}
-            {renderGroup(backMatter, "Back Matter")}
-          </div>
-        )}
+        <div className="assign-scroll">
+          {uploading ? (
+            <div className="assign-uploading">
+              <div className="spinner" />
+              <span>Processing your recording for {uploadingLabel}…</span>
+            </div>
+          ) : (
+            <div className="assign-groups">
+              {renderGroup(frontMatter, "Front Matter")}
+              {renderGroup(mainChapters, "Chapters")}
+              {renderGroup(backMatter, "Back Matter")}
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="error-bar">
