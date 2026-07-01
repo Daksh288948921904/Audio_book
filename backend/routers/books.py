@@ -9,12 +9,23 @@ from backend.auth import get_current_user
 router = APIRouter(prefix="/books", tags=["books"])
 
 
+FRONT_MATTER = {
+    "memoir":  ["Dedication", "Epigraph", "Foreword", "Preface", "Author's Note"],
+    "fiction": ["Dedication", "Epigraph", "Foreword"],
+}
+BACK_MATTER = {
+    "memoir":  ["Acknowledgements", "A Note on Sources", "About the Author"],
+    "fiction": ["Acknowledgements", "About the Author"],
+}
+
+
 def _chapter_row(c: Chapter) -> dict:
     return {
         "id": c.id,
         "book_id": c.book_id,
         "number": c.number,
         "title": c.title,
+        "section_type": c.section_type or "chapter",
         "status": c.status,
         "generated_text": c.generated_text,
         "summary": c.summary,
@@ -163,24 +174,37 @@ def create_book_chapters(
     if book.user_id != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Not your book")
 
+    genre = book.genre or "fiction"
     last = db.query(Chapter).filter(Chapter.book_id == book_id).order_by(Chapter.number.desc()).first()
     num = (last.number + 1) if last else 1
+    sections = []
 
-    chapters = []
+    def add(title: str | None, stype: str):
+        nonlocal num
+        ch = Chapter(book_id=book_id, number=num, title=title, section_type=stype, status="recording")
+        db.add(ch); sections.append(ch); num += 1
 
+    # Front matter
+    for t in FRONT_MATTER.get(genre, FRONT_MATTER["fiction"]):
+        add(t, "front_matter")
+
+    # Prologue
     if include_prologue:
-        ch = Chapter(book_id=book_id, number=num, title="Prologue", status="recording")
-        db.add(ch); chapters.append(ch); num += 1
+        add("Prologue", "chapter")
 
+    # Main chapters (untitled, author names them)
     for _ in range(count):
-        ch = Chapter(book_id=book_id, number=num, status="recording")
-        db.add(ch); chapters.append(ch); num += 1
+        add(None, "chapter")
 
+    # Epilogue
     if include_epilogue:
-        ch = Chapter(book_id=book_id, number=num, title="Epilogue", status="recording")
-        db.add(ch); chapters.append(ch)
+        add("Epilogue", "chapter")
+
+    # Back matter
+    for t in BACK_MATTER.get(genre, BACK_MATTER["fiction"]):
+        add(t, "back_matter")
 
     db.commit()
-    for ch in chapters:
+    for ch in sections:
         db.refresh(ch)
-    return [_chapter_row(c) for c in chapters]
+    return [_chapter_row(c) for c in sections]

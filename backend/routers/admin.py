@@ -132,6 +132,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "book_id":       c.book_id,
             "number":        c.number,
             "title":         c.title,
+            "section_type":  c.section_type or "chapter",
             "status":        c.status,
             "generated_text": c.generated_text,
             "summary":       c.summary,

@@ -38,6 +38,7 @@ export interface CmsChapter {
   book_id: number;
   number: number;
   title: string | null;
+  section_type: "front_matter" | "chapter" | "back_matter";
   status: "recording" | "generating" | "done";
   generated_text?: string;
   summary?: string;

@@ -438,3 +438,17 @@ audio { width: 100%; margin-top: 10px; height: 34px; opacity: 0.85; }
   animation: spin 0.7s linear infinite; flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.cms-group-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px;
+  color: var(--text-3); margin: 24px 0 10px;
+}
+.cms-group-label:first-child { margin-top: 0; }
+
+.cms-segs-link {
+  margin-top: 6px; width: 100%; background: none;
+  border: 1px solid var(--border); border-radius: 7px;
+  color: var(--text-3); font-size: 11px; padding: 5px;
+  cursor: pointer;
+}
+.cms-segs-link:hover { color: var(--text-2); border-color: var(--text-3); }

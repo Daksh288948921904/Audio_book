@@ -25,9 +25,11 @@ function ManuscriptPanel({
   const [saveErr, setSaveErr]   = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  const heading = chapter.title
-    ? `Chapter ${chapter.number}: ${chapter.title}`
-    : `Chapter ${chapter.number}`;
+  const heading = chapter.section_type !== "chapter"
+    ? (chapter.title ?? `Section ${chapter.number}`)
+    : chapter.title
+      ? `Chapter ${chapter.number}: ${chapter.title}`
+      : `Chapter ${chapter.number}`;
 
   const paragraphs = (chapter.generated_text ?? "")
     .split(/\n\n+/)
@@ -174,9 +176,11 @@ function ChapterSegmentsPanel({
       .finally(() => setLoading(false));
   }, [chapter.id]);
 
-  const heading = chapter.title
-    ? `Chapter ${chapter.number}: ${chapter.title}`
-    : `Chapter ${chapter.number}`;
+  const heading = chapter.section_type !== "chapter"
+    ? (chapter.title ?? `Section ${chapter.number}`)
+    : chapter.title
+      ? `Chapter ${chapter.number}: ${chapter.title}`
+      : `Chapter ${chapter.number}`;
 
   return (
     <div className="cms-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -252,6 +256,10 @@ export default function BookDashboard({ user, book }: Props) {
     } catch (e) { setError(String(e)); }
     finally { setCompiling(false); }
   }
+
+  const frontMatter  = chapters.filter((c) => c.section_type === "front_matter");
+  const mainChapters = chapters.filter((c) => c.section_type === "chapter");
+  const backMatter   = chapters.filter((c) => c.section_type === "back_matter");
 
   const doneCount = chapters.filter((c) => c.status === "done").length;
   const recordingWithSegs = chapters.filter(
@@ -341,33 +349,64 @@ export default function BookDashboard({ user, book }: Props) {
       ) : chapters.length === 0 ? (
         <div className="cms-empty">No chapters in this book.</div>
       ) : (
-        <div className="cms-chapter-grid">
-          {chapters.map((ch, i) => (
-            <div key={ch.id}>
-              <AdminChapterCard
-                chapter={ch}
-                segments={segsMap[ch.id] ?? []}
-                index={i}
-                onUpdated={handleChapterUpdated}
-                onViewManuscript={setViewMs}
-              />
-              {/* Recordings link */}
-              {(segsMap[ch.id]?.length ?? 0) > 0 && (
-                <button
-                  onClick={() => setViewSegs(ch)}
-                  style={{
-                    marginTop: 6, width: "100%", background: "none",
-                    border: "1px solid var(--border)", borderRadius: 7,
-                    color: "var(--text-3)", fontSize: 11, padding: "5px",
-                    cursor: "pointer",
-                  }}
-                >
-                  🎙 View {segsMap[ch.id].length} recording{segsMap[ch.id].length !== 1 ? "s" : ""}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        <>
+          {frontMatter.length > 0 && (
+            <>
+              <div className="cms-group-label">Front Matter</div>
+              <div className="cms-chapter-grid">
+                {frontMatter.map((ch, i) => (
+                  <div key={ch.id}>
+                    <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
+                      onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
+                    {(segsMap[ch.id]?.length ?? 0) > 0 && (
+                      <button onClick={() => setViewSegs(ch)} className="cms-segs-link">
+                        🎙 View {segsMap[ch.id].length} recording{segsMap[ch.id].length !== 1 ? "s" : ""}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {mainChapters.length > 0 && (
+            <>
+              <div className="cms-group-label">Chapters</div>
+              <div className="cms-chapter-grid">
+                {mainChapters.map((ch, i) => (
+                  <div key={ch.id}>
+                    <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
+                      onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
+                    {(segsMap[ch.id]?.length ?? 0) > 0 && (
+                      <button onClick={() => setViewSegs(ch)} className="cms-segs-link">
+                        🎙 View {segsMap[ch.id].length} recording{segsMap[ch.id].length !== 1 ? "s" : ""}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {backMatter.length > 0 && (
+            <>
+              <div className="cms-group-label">Back Matter</div>
+              <div className="cms-chapter-grid">
+                {backMatter.map((ch, i) => (
+                  <div key={ch.id}>
+                    <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
+                      onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
+                    {(segsMap[ch.id]?.length ?? 0) > 0 && (
+                      <button onClick={() => setViewSegs(ch)} className="cms-segs-link">
+                        🎙 View {segsMap[ch.id].length} recording{segsMap[ch.id].length !== 1 ? "s" : ""}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* Manuscript panel */}

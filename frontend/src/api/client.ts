@@ -32,6 +32,7 @@ export interface Chapter {
   book_id: number | null;
   number: number;
   title: string | null;
+  section_type: "front_matter" | "chapter" | "back_matter";
   status: "recording" | "generating" | "done";
   created_at: string;
   finished_at: string | null;

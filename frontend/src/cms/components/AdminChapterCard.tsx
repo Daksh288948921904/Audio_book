@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, type CmsChapter, type CmsSegment } from "../api/adminClient";
 
+const SECTION_ICONS: Record<string, string> = {
+  "Dedication": "💌", "Epigraph": "💬", "Foreword": "✍", "Preface": "📝",
+  "Author's Note": "🗒", "Acknowledgements": "🙏", "A Note on Sources": "📚",
+  "About the Author": "👤", "Prologue": "🌅", "Epilogue": "🌇",
+};
+
 const GRADIENTS = [
   "linear-gradient(145deg, #0f1f3d 0%, #1a3a6b 55%, #2a4f8f 100%)",
   "linear-gradient(145deg, #1a0d2e 0%, #3d1a6e 55%, #5a2d9e 100%)",
@@ -127,7 +133,11 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
           {badgeLabel()}
         </div>
 
-        <div className="adm-num">{String(chapter.number).padStart(2, "0")}</div>
+        {chapter.section_type !== "chapter" ? (
+          <div className="adm-num" style={{ fontSize: 24 }}>{SECTION_ICONS[chapter.title ?? ""] ?? "📄"}</div>
+        ) : (
+          <div className="adm-num">{String(chapter.number).padStart(2, "0")}</div>
+        )}
         <div className="adm-title">{chapter.title || `Chapter ${chapter.number}`}</div>
         <div className="adm-segs">{segments.length} recording{segments.length !== 1 ? "s" : ""}</div>
 
@@ -161,7 +171,7 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
         <div className="adm-actions">
           {(chapter.status === "recording" || isStuck) && segments.length > 0 && (
             <button className="adm-btn adm-btn-write" onClick={handleWrite} disabled={writing}>
-              {isStuck ? "↺ Retry Write" : "✦ Write Chapter"}
+              {isStuck ? "↺ Retry Write" : chapter.section_type === "chapter" ? "✦ Write Chapter" : "✦ Write Section"}
             </button>
           )}
           {chapter.status === "done" && !isStuck && (

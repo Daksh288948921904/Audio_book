@@ -17,10 +17,17 @@ const GRADIENTS = [
   "linear-gradient(145deg, #1a1010 0%, #3d1f1f 55%, #6a2828 100%)",
 ];
 
+const SECTION_ICONS: Record<string, string> = {
+  "Dedication": "💌", "Epigraph": "💬", "Foreword": "✍", "Preface": "📝",
+  "Author's Note": "🗒", "Acknowledgements": "🙏", "A Note on Sources": "📚",
+  "About the Author": "👤",
+};
+
 interface Props {
   chapter: Chapter;
   segments: Segment[];
   index: number;
+  displayNum: number | null;
   onChapterUpdated: (ch: Chapter) => void;
   onChapterDeleted: (id: number) => void;
   onSegmentDeleted: (chapterId: number, segId: number) => void;
@@ -28,7 +35,7 @@ interface Props {
 }
 
 export default function ChapterCard({
-  chapter, segments, index, onChapterUpdated, onChapterDeleted, onSegmentDeleted, onViewManuscript,
+  chapter, segments, index, displayNum, onChapterUpdated, onChapterDeleted, onSegmentDeleted, onViewManuscript,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(false);
@@ -108,7 +115,11 @@ export default function ChapterCard({
           {statusLabel}
         </div>
 
-        <div className="cc-big-num">{String(chapter.number).padStart(2, "0")}</div>
+        {chapter.section_type !== "chapter" ? (
+          <div className="cc-section-icon">{SECTION_ICONS[chapter.title ?? ""] ?? "📄"}</div>
+        ) : displayNum !== null ? (
+          <div className="cc-big-num">{String(displayNum).padStart(2, "0")}</div>
+        ) : null}
 
         {chapter.status === "done" && chapter.generated_text && (
           <div className="cc-card-excerpt">
@@ -131,11 +142,17 @@ export default function ChapterCard({
         <div className="cc-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="cc-modal">
             <div className="cc-modal-head" style={{ background: gradient }}>
-              <div className="cc-modal-num">
-                {String(chapter.number).padStart(2, "0")}
-              </div>
+              {chapter.section_type !== "chapter" ? (
+                <div className="cc-section-icon" style={{ fontSize: 28, margin: "0 12px 0 0" }}>
+                  {SECTION_ICONS[chapter.title ?? ""] ?? "📄"}
+                </div>
+              ) : (
+                <div className="cc-modal-num">
+                  {displayNum !== null ? String(displayNum).padStart(2, "0") : String(chapter.number).padStart(2, "0")}
+                </div>
+              )}
               <div className="cc-modal-head-info">
-                {editTitle ? (
+                {chapter.section_type === "chapter" && editTitle ? (
                   <input
                     ref={titleRef}
                     className="cc-title-input"
@@ -147,10 +164,10 @@ export default function ChapterCard({
                 ) : (
                   <div
                     className="cc-modal-title"
-                    onDoubleClick={chapter.status === "recording" ? startEdit : undefined}
-                    title={chapter.status === "recording" ? "Double-click to rename" : undefined}
+                    onDoubleClick={chapter.section_type === "chapter" && chapter.status === "recording" ? startEdit : undefined}
+                    title={chapter.section_type === "chapter" && chapter.status === "recording" ? "Double-click to rename" : undefined}
                   >
-                    {chapter.title || `Chapter ${chapter.number}`}
+                    {chapter.title || (chapter.section_type === "chapter" ? `Chapter ${displayNum ?? chapter.number}` : `Section ${chapter.number}`)}
                   </div>
                 )}
                 <div className={`cc-badge cc-badge-${chapter.status}`} style={{ marginTop: 6, width: "fit-content" }}>
@@ -214,7 +231,7 @@ export default function ChapterCard({
                       <button className="cc-reopen" onClick={handleReopen}>← Re-record</button>
                     </>
                   )}
-                  {chapter.status === "recording" && (
+                  {chapter.status === "recording" && chapter.section_type === "chapter" && (
                     <button className="cc-rename" onClick={startEdit}>✏ Rename</button>
                   )}
                   <button className="cc-delete" onClick={handleDelete}>🗑</button>

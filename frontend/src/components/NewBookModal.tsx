@@ -8,6 +8,15 @@ interface Props {
 
 const COUNTS = [3, 5, 8, 10, 15, 20];
 
+const FRONT_MATTER = {
+  memoir:  ["Dedication", "Epigraph", "Foreword", "Preface", "Author's Note"],
+  fiction: ["Dedication", "Epigraph", "Foreword"],
+};
+const BACK_MATTER = {
+  memoir:  ["Acknowledgements", "A Note on Sources", "About the Author"],
+  fiction: ["Acknowledgements", "About the Author"],
+};
+
 export default function NewBookModal({ onCreated, onClose }: Props) {
   const [title, setTitle]   = useState("");
   const [genre, setGenre]   = useState<"fiction" | "memoir">("fiction");
@@ -135,12 +144,31 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
               style={{ width: 80, textAlign: "center" }}
             />
           </div>
-          {(prologue || epilogue) && (
-            <div style={{ fontSize: 11, color: "var(--text-2)", marginTop: 6 }}>
-              Total: {finalCount + (prologue ? 1 : 0) + (epilogue ? 1 : 0)} chapters
-              {prologue ? " (incl. Prologue)" : ""}{epilogue ? " (incl. Epilogue)" : ""}
+        </div>
+
+        {/* Auto-included sections preview */}
+        <div className="nb-sections-preview">
+          <div className="nb-sections-row">
+            <div className="nb-sections-col">
+              <div className="nb-sections-heading">Front Matter</div>
+              {FRONT_MATTER[genre].map((s) => <div key={s} className="nb-section-item">· {s}</div>)}
+              {prologue && <div className="nb-section-item nb-section-body">· Prologue</div>}
             </div>
-          )}
+            <div className="nb-sections-col nb-sections-mid">
+              <div className="nb-sections-heading">Chapters</div>
+              <div className="nb-section-item nb-section-body">
+                · {finalCount} chapter{finalCount !== 1 ? "s" : ""}
+              </div>
+              {epilogue && <div className="nb-section-item nb-section-body">· Epilogue</div>}
+            </div>
+            <div className="nb-sections-col">
+              <div className="nb-sections-heading">Back Matter</div>
+              {BACK_MATTER[genre].map((s) => <div key={s} className="nb-section-item">· {s}</div>)}
+            </div>
+          </div>
+          <div className="nb-sections-total">
+            {FRONT_MATTER[genre].length + (prologue ? 1 : 0) + finalCount + (epilogue ? 1 : 0) + BACK_MATTER[genre].length} total recordable sections
+          </div>
         </div>
 
         {error && (

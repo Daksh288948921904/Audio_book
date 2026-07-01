@@ -211,9 +211,23 @@ export default function App() {
   if (!authUser) return <LandingPage onLogin={handleLogin} />;
 
   const activeBook = books.find((b) => b.id === activeBookId) ?? null;
-  const totalSegs = Object.values(segsMap).reduce((a, s) => a + s.length, 0);
-  const doneCount = chapters.filter((c) => c.status === "done").length;
+  const totalSegs  = Object.values(segsMap).reduce((a, s) => a + s.length, 0);
+  const mainChapters = chapters.filter((c) => c.section_type === "chapter");
+  const frontMatter  = chapters.filter((c) => c.section_type === "front_matter");
+  const backMatter   = chapters.filter((c) => c.section_type === "back_matter");
+  const doneCount = mainChapters.filter((c) => c.status === "done").length;
   const segCounts = Object.fromEntries(Object.entries(segsMap).map(([k, v]) => [Number(k), v.length]));
+
+  // Display number for each chapter-type section (excludes Prologue/Epilogue)
+  const numberedIds = mainChapters
+    .filter((c) => c.title !== "Prologue" && c.title !== "Epilogue")
+    .map((c) => c.id);
+  function displayNum(ch: { id: number; section_type: string; title: string | null }): number | null {
+    if (ch.section_type !== "chapter") return null;
+    if (ch.title === "Prologue" || ch.title === "Epilogue") return null;
+    const idx = numberedIds.indexOf(ch.id);
+    return idx === -1 ? null : idx + 1;
+  }
 
   return (
     <div className="shell">
@@ -319,24 +333,53 @@ export default function App() {
               <RecordZone onRecorded={handleRecorded} />
 
               <div className="feed-section">
+                {/* Front Matter */}
+                {frontMatter.length > 0 && (
+                  <>
+                    <div className="feed-head">
+                      <div className="feed-label feed-label-matter">Front Matter</div>
+                    </div>
+                    <div className="chapter-list">
+                      {frontMatter.map((ch, i) => (
+                        <ChapterCard key={ch.id} chapter={ch} segments={segsMap[ch.id] ?? []}
+                          index={i} displayNum={displayNum(ch)}
+                          onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
+                          onSegmentDeleted={handleSegmentDeleted} onViewManuscript={handleViewManuscript} />
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Main Chapters */}
                 <div className="feed-head">
                   <div className="feed-label">Chapters</div>
-                  <div className="feed-tally">{doneCount}/{chapters.length} complete</div>
+                  <div className="feed-tally">{doneCount}/{mainChapters.length} complete</div>
                 </div>
                 <div className="chapter-list">
-                  {chapters.map((ch, i) => (
-                    <ChapterCard
-                      key={ch.id}
-                      chapter={ch}
-                      segments={segsMap[ch.id] ?? []}
-                      index={i}
-                      onChapterUpdated={handleChapterUpdated}
-                      onChapterDeleted={handleChapterDeleted}
-                      onSegmentDeleted={handleSegmentDeleted}
-                      onViewManuscript={handleViewManuscript}
-                    />
+                  {mainChapters.map((ch, i) => (
+                    <ChapterCard key={ch.id} chapter={ch} segments={segsMap[ch.id] ?? []}
+                      index={i} displayNum={displayNum(ch)}
+                      onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
+                      onSegmentDeleted={handleSegmentDeleted} onViewManuscript={handleViewManuscript} />
                   ))}
                 </div>
+
+                {/* Back Matter */}
+                {backMatter.length > 0 && (
+                  <>
+                    <div className="feed-head">
+                      <div className="feed-label feed-label-matter">Back Matter</div>
+                    </div>
+                    <div className="chapter-list">
+                      {backMatter.map((ch, i) => (
+                        <ChapterCard key={ch.id} chapter={ch} segments={segsMap[ch.id] ?? []}
+                          index={i} displayNum={displayNum(ch)}
+                          onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
+                          onSegmentDeleted={handleSegmentDeleted} onViewManuscript={handleViewManuscript} />
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -43,6 +43,7 @@ class Chapter(Base):
     book_id        = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=True, index=True)
     number         = Column(Integer, nullable=False)
     title          = Column(String, nullable=True)
+    section_type   = Column(String, default="chapter")  # "front_matter" | "chapter" | "back_matter"
     generated_text = Column(Text, nullable=True)
     summary        = Column(Text, nullable=True)
     status         = Column(String, default="recording")  # recording | generating | done
@@ -80,6 +81,9 @@ def _sqlite_migrate():
             conn.commit()
 
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(chapters)")).fetchall()]
+        if "section_type" not in cols:
+            conn.execute(text("ALTER TABLE chapters ADD COLUMN section_type VARCHAR DEFAULT 'chapter'"))
+            conn.commit()
         if "book_id" not in cols:
             conn.execute(text(
                 "ALTER TABLE chapters ADD COLUMN book_id INTEGER REFERENCES books(id) ON DELETE CASCADE"
@@ -136,6 +140,9 @@ def _postgres_migrate():
         ))
         conn.execute(text(
             "ALTER TABLE books ADD COLUMN IF NOT EXISTS genre VARCHAR DEFAULT 'fiction'"
+        ))
+        conn.execute(text(
+            "ALTER TABLE chapters ADD COLUMN IF NOT EXISTS section_type VARCHAR DEFAULT 'chapter'"
         ))
         conn.commit()
 

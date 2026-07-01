@@ -1806,6 +1806,31 @@ html, body, #root {
 .nb-check-name { font-size: 13px; font-weight: 500; color: var(--text); }
 .nb-check-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
 
+/* Section icon (front/back matter cards) */
+.cc-section-icon { font-size: 28px; line-height: 1; margin-bottom: 6px; opacity: 0.85; }
+
+/* Front/back matter feed label */
+.feed-label-matter { color: var(--text-2) !important; font-size: 10px !important; letter-spacing: 0.8px; }
+
+/* New book modal — sections preview */
+.nb-sections-preview {
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  border-radius: var(--r); padding: 12px 14px;
+}
+.nb-sections-row { display: flex; gap: 8px; }
+.nb-sections-col { flex: 1; min-width: 0; }
+.nb-sections-mid { border-left: 1px solid var(--border); border-right: 1px solid var(--border); padding: 0 8px; }
+.nb-sections-heading {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--text-3); margin-bottom: 5px;
+}
+.nb-section-item { font-size: 11px; color: var(--text-2); line-height: 1.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nb-section-body { color: var(--blue-2); }
+.nb-sections-total {
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-2); text-align: center;
+}
+
 /* Genre badge in sidebar */
 .book-genre-badge {
   font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
