@@ -1,4 +1,5 @@
 import os
+import tempfile
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -36,15 +37,32 @@ async def upload_audio(
     object_name = f"ch{chapter_id}_seg{order_index}_{file.filename}"
     content = await file.read()
 
-    if storage.enabled():
-        content_type = file.content_type or "audio/webm"
-        file_path = storage.upload(object_name, content, content_type)
-    else:
-        file_path = os.path.join(UPLOAD_DIR, object_name)
-        with open(file_path, "wb") as f:
-            f.write(content)
+    # Always write to a local temp file first — pipeline (ffmpeg + Whisper) needs a real path
+    suffix = os.path.splitext(file.filename or "audio.webm")[1] or ".webm"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
 
-    segment = process_audio_segment(db, chapter_id, file_path, order_index)
+    try:
+        # Run transcription + intent + vector store on local temp file
+        segment = process_audio_segment(db, chapter_id, tmp_path, order_index)
+
+        # After pipeline succeeds, upload to Supabase and update filename in DB
+        if storage.enabled():
+            content_type = file.content_type or "audio/webm"
+            remote_url = storage.upload(object_name, content, content_type)
+            segment.filename = remote_url
+            db.commit()
+        else:
+            # Move temp file to permanent local path
+            perm_path = os.path.join(UPLOAD_DIR, object_name)
+            os.replace(tmp_path, perm_path)
+            segment.filename = perm_path
+            db.commit()
+            tmp_path = None  # already moved, don't delete
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
     return {
         "id": segment.id,
