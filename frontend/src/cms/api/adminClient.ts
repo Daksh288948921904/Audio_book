@@ -108,6 +108,14 @@ export async function cmsGetSegments(chapterId: number): Promise<CmsSegment[]> {
   return (await apiFetch(`/admin/audio/segments/${chapterId}`)).json();
 }
 
+export async function cmsReorderSegments(chapterId: number, segmentIds: number[]): Promise<void> {
+  await apiFetch(`/audio/segments/reorder`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chapter_id: chapterId, segment_ids: segmentIds }),
+  });
+}
+
 export async function cmsFetchAudioBlob(segmentId: number): Promise<string | null> {
   try {
     const res = await apiFetch(`/admin/audio/file/${segmentId}`);

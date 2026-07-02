@@ -407,6 +407,16 @@ html, body { background: var(--bg); color: var(--text-1); font-family: -apple-sy
 }
 .cms-seg:hover { border-color: var(--border2); }
 .cms-seg-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.cms-seg-drag-handle {
+  cursor: grab; color: var(--purple, #8B5CF6);
+  opacity: 0.55; flex-shrink: 0;
+  transition: opacity .15s, transform .12s;
+  display: flex; align-items: center; padding: 2px;
+}
+.cms-seg-drag-handle:hover { opacity: 1; transform: scale(1.15); }
+.cms-seg-drag-handle:active { cursor: grabbing; }
+.cms-seg.cms-seg-dragging { opacity: 0.3; border-style: dashed; border-color: #8B5CF6; }
+.cms-seg.cms-seg-drag-over { border-color: #8B5CF6; box-shadow: 0 0 0 2px rgba(139,92,246,0.35); background: rgba(139,92,246,0.07); }
 .cms-seg-idx {
   font-size: 11px; font-weight: 700; color: var(--text-3);
   background: var(--surface3); border-radius: 6px; padding: 2px 7px;

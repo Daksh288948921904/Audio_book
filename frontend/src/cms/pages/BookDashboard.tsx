@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   cmsListChapters, cmsGetSegments, cmsCompileBook, cmsUpdateChapterText, cmsDownloadPdf,
-  cmsFetchAudioBlob,
+  cmsFetchAudioBlob, cmsReorderSegments,
   type CmsChapter, type CmsBook, type CmsUser, type CmsSegment, type CompileResult,
 } from "../api/adminClient";
 import AdminChapterCard from "../components/AdminChapterCard";
@@ -115,7 +115,18 @@ function ManuscriptPanel({
 }
 
 // ── Segment audio player row ───────────────────────────────────────────────────
-function SegmentRow({ seg }: { seg: CmsSegment }) {
+function SegmentRow({
+  seg, draggable: canDrag, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd,
+}: {
+  seg: CmsSegment;
+  draggable?: boolean;
+  isDragging?: boolean;
+  isDragOver?: boolean;
+  onDragStart?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: () => void;
+  onDragEnd?: () => void;
+}) {
   const [src, setSrc]         = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState(false);
@@ -130,8 +141,28 @@ function SegmentRow({ seg }: { seg: CmsSegment }) {
   }
 
   return (
-    <div className="cms-seg" onClick={loadAudio}>
+    <div
+      className={`cms-seg${isDragging ? " cms-seg-dragging" : ""}${isDragOver ? " cms-seg-drag-over" : ""}`}
+      onClick={loadAudio}
+    >
       <div className="cms-seg-head">
+        {canDrag && (
+          <div
+            className="cms-seg-drag-handle"
+            draggable
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            onDragEnd={onDragEnd}
+            onClick={e => e.stopPropagation()}
+          >
+            <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+              <circle cx="3" cy="2.5" r="1.2"/><circle cx="7" cy="2.5" r="1.2"/>
+              <circle cx="3" cy="7"   r="1.2"/><circle cx="7" cy="7"   r="1.2"/>
+              <circle cx="3" cy="11.5" r="1.2"/><circle cx="7" cy="11.5" r="1.2"/>
+            </svg>
+          </div>
+        )}
         <span className="cms-seg-idx">#{seg.order_index}</span>
         {seg.intent && <span className="cms-intent-badge">{seg.intent}</span>}
       </div>
@@ -168,6 +199,10 @@ function ChapterSegmentsPanel({
   const [segs, setSegs]       = useState<CmsSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const dragIdx     = useRef<number | null>(null);
+  const dragOverIdx = useRef<number | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
 
   useEffect(() => {
     cmsGetSegments(chapter.id)
@@ -175,6 +210,34 @@ function ChapterSegmentsPanel({
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [chapter.id]);
+
+  const canReorder = chapter.status === "recording";
+
+  function handleDragStart(idx: number, id: number) {
+    dragIdx.current = idx; setDraggingId(id);
+  }
+  function handleDragOver(e: React.DragEvent, idx: number, id: number) {
+    e.preventDefault(); dragOverIdx.current = idx; setDragOverId(id);
+  }
+  function handleDrop() {
+    const from = dragIdx.current; const to = dragOverIdx.current;
+    if (from === null || to === null || from === to) {
+      setDraggingId(null); setDragOverId(null); return;
+    }
+    const next = [...segs];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    const reindexed = next.map((s, i) => ({ ...s, order_index: i + 1 }));
+    setSegs(reindexed);
+    setDraggingId(null); setDragOverId(null);
+    dragIdx.current = null; dragOverIdx.current = null;
+    cmsReorderSegments(chapter.id, reindexed.map(s => s.id))
+      .catch(() => { setSegs(segs); setError("Reorder failed — reverted."); });
+  }
+  function handleDragEnd() {
+    setDraggingId(null); setDragOverId(null);
+    dragIdx.current = null; dragOverIdx.current = null;
+  }
 
   const heading = chapter.section_type !== "chapter"
     ? (chapter.title ?? `Section ${chapter.number}`)
@@ -186,7 +249,7 @@ function ChapterSegmentsPanel({
     <div className="cms-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="cms-ms-panel">
         <div className="cms-ms-head">
-          <h2>{heading} — Recordings</h2>
+          <h2>{heading} — Recordings {canReorder && <span style={{ fontSize: 12, fontWeight: 400, color: "var(--text-3)" }}>· drag to reorder</span>}</h2>
           <div className="cms-ms-head-actions">
             <button className="cms-btn cms-btn-ghost" style={{ fontSize: 12 }} onClick={onClose}>✕ Close</button>
           </div>
@@ -200,7 +263,18 @@ function ChapterSegmentsPanel({
             <div className="cms-empty">No recordings for this chapter.</div>
           ) : (
             <div className="cms-segs">
-              {segs.map((s) => <SegmentRow key={s.id} seg={s} />)}
+              {segs.map((s, i) => (
+                <SegmentRow
+                  key={s.id} seg={s}
+                  draggable={canReorder}
+                  isDragging={draggingId === s.id}
+                  isDragOver={dragOverId === s.id}
+                  onDragStart={() => handleDragStart(i, s.id)}
+                  onDragOver={(e) => handleDragOver(e, i, s.id)}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                />
+              ))}
             </div>
           )}
         </div>

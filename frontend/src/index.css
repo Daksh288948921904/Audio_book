@@ -912,17 +912,17 @@ html, body, #root {
 }
 .seg-drag-handle {
   cursor: grab;
-  color: var(--text-3);
+  color: var(--violet);
   padding: 4px 3px;
   border-radius: 4px;
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  opacity: 0.4;
-  transition: opacity .15s;
+  opacity: 0.55;
+  transition: opacity .15s, transform .12s;
 }
-.seg-drag-handle:hover { opacity: 1; }
-.seg-drag-handle:active { cursor: grabbing; }
+.seg-drag-handle:hover { opacity: 1; transform: scale(1.15); }
+.seg-drag-handle:active { cursor: grabbing; opacity: 1; }
 
 .seg-move {
   background: none;
@@ -955,8 +955,12 @@ html, body, #root {
 }
 .seg-del:hover { color: var(--rose); background: rgba(248,113,113,0.08); }
 
-.seg.seg-dragging { opacity: 0.35; }
-.seg.seg-drag-over { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(79,142,247,0.25); }
+.seg.seg-dragging { opacity: 0.3; border-color: var(--violet); border-style: dashed; }
+.seg.seg-drag-over {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 2px rgba(139,92,246,0.35);
+  background: rgba(139,92,246,0.07);
+}
 
 .cc-segs-hint { font-size: 10px; color: var(--text-3); font-weight: 400; margin-left: 6px; }
 
