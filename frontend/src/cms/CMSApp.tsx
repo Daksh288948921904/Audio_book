@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { loginWithGoogle, setAuthToken } from "../api/client";
-import { getAdminMe } from "./api/adminClient";
+import { getAdminMe, cmsSearch, type SearchResult } from "./api/adminClient";
 import UsersPage from "./pages/UsersPage";
 import UserBooksPage from "./pages/UserBooksPage";
 import BookDashboard from "./pages/BookDashboard";
@@ -18,6 +18,28 @@ type View =
 
 export default function CMSApp() {
   const [view, setView] = useState<View>({ page: "loading" });
+  const [searchQ, setSearchQ]         = useState("");
+  const [searchRes, setSearchRes]     = useState<SearchResult | null>(null);
+  const [searchOpen, setSearchOpen]   = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!searchQ.trim()) { setSearchRes(null); return; }
+    const t = setTimeout(() => {
+      cmsSearch(searchQ).then(setSearchRes).catch(() => {});
+    }, 260);
+    return () => clearTimeout(t);
+  }, [searchQ]);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("ink_token");
@@ -120,12 +142,77 @@ export default function CMSApp() {
     </nav>
   );
 
+  const hasResults = searchRes && (searchRes.users.length > 0 || searchRes.books.length > 0);
+
+  function goToUser(googleId: string, name: string | null, email: string) {
+    setSearchQ(""); setSearchRes(null); setSearchOpen(false);
+    setView({ page: "books", adminName, adminEmail,
+      user: { id: 0, google_id: googleId, name, email, book_count: 0, book_titles: [], created_at: "" } });
+  }
+
   return (
     <div className="cms-shell">
       {/* Top bar */}
       <header className="cms-topbar">
         <div className="cms-logo">Inkwell <span>CMS</span></div>
         {breadcrumb}
+
+        {/* Global search */}
+        <div className="cms-search-wrap" ref={searchRef}>
+          <div className="cms-search-box">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+              <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <input
+              className="cms-search-input"
+              placeholder="Search users or books…"
+              value={searchQ}
+              onChange={(e) => { setSearchQ(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+            />
+            {searchQ && (
+              <button className="cms-search-clear" onClick={() => { setSearchQ(""); setSearchRes(null); }}>×</button>
+            )}
+          </div>
+          {searchOpen && searchQ && (
+            <div className="cms-search-dropdown">
+              {!hasResults ? (
+                <div className="cms-search-empty">No results for "{searchQ}"</div>
+              ) : (
+                <>
+                  {(searchRes?.users ?? []).length > 0 && (
+                    <div className="cms-search-group">
+                      <div className="cms-search-group-label">Users</div>
+                      {searchRes!.users.map((u) => (
+                        <button key={u.google_id} className="cms-search-item"
+                          onClick={() => goToUser(u.google_id, u.name, u.email)}>
+                          <span className="cms-si-icon">👤</span>
+                          <span className="cms-si-main">{u.name ?? u.email}</span>
+                          {u.name && <span className="cms-si-sub">{u.email}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {(searchRes?.books ?? []).length > 0 && (
+                    <div className="cms-search-group">
+                      <div className="cms-search-group-label">Books</div>
+                      {searchRes!.books.map((b) => (
+                        <button key={b.id} className="cms-search-item"
+                          onClick={() => goToUser(b.owner_google_id, b.owner_name, b.owner_email)}>
+                          <span className="cms-si-icon">{b.genre === "memoir" ? "✍" : "📖"}</span>
+                          <span className="cms-si-main">{b.title}</span>
+                          <span className="cms-si-sub">{b.owner_name ?? b.owner_email}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="cms-topbar-right">
           <div className="cms-user-pill">
             <div className="avatar">{(adminName?.[0] ?? adminEmail[0]).toUpperCase()}</div>

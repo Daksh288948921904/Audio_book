@@ -564,3 +564,38 @@ audio { width: 100%; margin-top: 10px; height: 34px; opacity: 0.85; }
   font-size: 12px; color: var(--text); padding: 3px 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+/* ── CMS move-segment overlay ────────────────────────────────────────────────── */
+.cms-move-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.cms-move-picker {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 14px; padding: 16px;
+  min-width: 200px; max-width: 280px; max-height: 70vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.cms-move-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--text-3); margin-bottom: 10px;
+}
+.cms-move-list { overflow-y: auto; flex: 1; }
+.cms-move-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 8px 10px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 6px;
+  font-family: inherit; font-size: 13px; color: var(--text-1);
+  cursor: pointer; text-align: left;
+}
+.cms-move-item:hover:not(:disabled) {
+  background: rgba(59,130,246,0.12); border-color: var(--blue);
+}
+.cms-move-cancel {
+  width: 100%; padding: 7px; background: none;
+  border: 1px solid var(--border); border-radius: 8px; margin-top: 4px;
+  font-family: inherit; font-size: 12px; color: var(--text-3); cursor: pointer;
+}

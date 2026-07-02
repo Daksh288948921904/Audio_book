@@ -80,18 +80,18 @@ def _concat_wavs(wav_bytes_list: list[bytes]) -> bytes:
 
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _: dict = _admin):
-    users = db.query(User).order_by(User.created_at).all()
+    users = db.query(User).order_by(User.created_at.desc()).all()
     result = []
     for u in users:
         books = db.query(Book).filter(Book.user_id == u.google_id).all()
         result.append({
-            "id":          u.id,
-            "google_id":   u.google_id,
-            "name":        u.name,
-            "email":       u.email,
-            "book_count":  len(books),
+            "id":         u.id,
+            "google_id":  u.google_id,
+            "name":       u.name,
+            "email":      u.email,
+            "book_count": len(books),
             "book_titles": [b.title for b in books],
-            "created_at":  u.created_at,
+            "created_at": u.created_at,
         })
     return result
 
@@ -101,31 +101,31 @@ def search(q: str = "", db: Session = Depends(get_db), _: dict = _admin):
     if not q.strip():
         return {"users": [], "books": []}
     term = f"%{q.lower()}%"
-
-    matched_users = (
+    users = (
         db.query(User)
-        .filter(
-            (User.name.ilike(term)) | (User.email.ilike(term))
-        )
-        .limit(8).all()
+        .filter((User.name.ilike(term)) | (User.email.ilike(term)))
+        .limit(10)
+        .all()
     )
-    matched_books = (
-        db.query(Book, User)
-        .join(User, User.google_id == Book.user_id)
+    books = (
+        db.query(Book)
         .filter(Book.title.ilike(term))
-        .limit(8).all()
+        .limit(10)
+        .all()
     )
-
+    user_map = {u.google_id: u for u in db.query(User).all()}
     return {
-        "users": [
-            {"google_id": u.google_id, "name": u.name, "email": u.email}
-            for u in matched_users
-        ],
+        "users": [{"google_id": u.google_id, "name": u.name, "email": u.email} for u in users],
         "books": [
-            {"id": b.id, "title": b.title, "genre": b.genre or "fiction",
-             "owner_name": u.name, "owner_email": u.email,
-             "owner_google_id": u.google_id}
-            for b, u in matched_books
+            {
+                "id":             b.id,
+                "title":          b.title,
+                "genre":          b.genre or "fiction",
+                "owner_name":     user_map.get(b.user_id, User()).name,
+                "owner_email":    user_map.get(b.user_id, User()).email or "",
+                "owner_google_id": b.user_id,
+            }
+            for b in books
         ],
     }
 

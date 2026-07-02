@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   cmsListChapters, cmsGetSegments, cmsCompileBook, cmsUpdateChapterText, cmsDownloadPdf,
-  cmsFetchAudioBlob, cmsReorderSegments,
+  cmsFetchAudioBlob, cmsReorderSegments, cmsMoveSegment,
   type CmsChapter, type CmsBook, type CmsUser, type CmsSegment, type CompileResult,
 } from "../api/adminClient";
 import AdminChapterCard from "../components/AdminChapterCard";
@@ -116,7 +116,8 @@ function ManuscriptPanel({
 
 // ── Segment audio player row ───────────────────────────────────────────────────
 function SegmentRow({
-  seg, draggable: canDrag, isDragging, isDragOver, onDragStart, onDragOver, onDrop, onDragEnd,
+  seg, draggable: canDrag, isDragging, isDragOver,
+  onDragStart, onDragOver, onDrop, onDragEnd, onMove,
 }: {
   seg: CmsSegment;
   draggable?: boolean;
@@ -126,6 +127,7 @@ function SegmentRow({
   onDragOver?: (e: React.DragEvent) => void;
   onDrop?: () => void;
   onDragEnd?: () => void;
+  onMove?: (id: number) => void;
 }) {
   const [src, setSrc]         = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -165,6 +167,17 @@ function SegmentRow({
         )}
         <span className="cms-seg-idx">#{seg.order_index}</span>
         {seg.intent && <span className="cms-intent-badge">{seg.intent}</span>}
+        {onMove && (
+          <button
+            className="cms-seg-move-btn"
+            onClick={e => { e.stopPropagation(); onMove(seg.id); }}
+            title="Move to another section"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+              <path d="M2 6h8M7 3l3 3-3 3"/>
+            </svg>
+          </button>
+        )}
       </div>
       {seg.transcript && <div className="cms-seg-text">{seg.transcript}</div>}
 
@@ -191,9 +204,10 @@ function SegmentRow({
 
 // ── Chapter detail side panel (segments view) ──────────────────────────────────
 function ChapterSegmentsPanel({
-  chapter, onClose,
+  chapter, allChapters, onClose,
 }: {
   chapter: CmsChapter;
+  allChapters: CmsChapter[];
   onClose: () => void;
 }) {
   const [segs, setSegs]       = useState<CmsSegment[]>([]);
@@ -203,6 +217,8 @@ function ChapterSegmentsPanel({
   const dragOverIdx = useRef<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [movingSegId, setMovingSegId]   = useState<number | null>(null);
+  const [movingToId,  setMovingToId]    = useState<number | null>(null);
 
   useEffect(() => {
     cmsGetSegments(chapter.id)
@@ -212,6 +228,17 @@ function ChapterSegmentsPanel({
   }, [chapter.id]);
 
   const canReorder = chapter.status === "recording";
+  const moveTargets = allChapters.filter(c => c.id !== chapter.id && c.status === "recording");
+
+  async function handleMove(targetChapterId: number) {
+    if (!movingSegId) return;
+    setMovingToId(targetChapterId);
+    try {
+      await cmsMoveSegment(movingSegId, targetChapterId);
+      setSegs(prev => prev.filter(s => s.id !== movingSegId));
+    } catch (e) { setError(String(e)); }
+    finally { setMovingSegId(null); setMovingToId(null); }
+  }
 
   function handleDragStart(idx: number, id: number) {
     dragIdx.current = idx; setDraggingId(id);
@@ -273,8 +300,34 @@ function ChapterSegmentsPanel({
                   onDragOver={(e) => handleDragOver(e, i, s.id)}
                   onDrop={handleDrop}
                   onDragEnd={handleDragEnd}
+                  onMove={canReorder && moveTargets.length > 0 ? setMovingSegId : undefined}
                 />
               ))}
+            </div>
+          )}
+
+          {/* Move picker */}
+          {movingSegId && (
+            <div className="cms-move-overlay" onClick={() => setMovingSegId(null)}>
+              <div className="cms-move-picker" onClick={e => e.stopPropagation()}>
+                <div className="cms-move-title">Move to section</div>
+                <div className="cms-move-list">
+                  {moveTargets.map(t => (
+                    <button
+                      key={t.id}
+                      className="cms-move-item"
+                      disabled={movingToId === t.id}
+                      onClick={() => handleMove(t.id)}
+                    >
+                      {movingToId === t.id
+                        ? <div className="cms-spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+                        : "→"}
+                      <span>{t.title || `Chapter ${t.number}`}</span>
+                    </button>
+                  ))}
+                </div>
+                <button className="cms-move-cancel" onClick={() => setMovingSegId(null)}>Cancel</button>
+              </div>
             </div>
           )}
         </div>
@@ -496,6 +549,7 @@ export default function BookDashboard({ user, book }: Props) {
       {viewSegs && (
         <ChapterSegmentsPanel
           chapter={viewSegs}
+          allChapters={chapters}
           onClose={() => setViewSegs(null)}
         />
       )}

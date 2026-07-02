@@ -116,6 +116,14 @@ export async function cmsReorderSegments(chapterId: number, segmentIds: number[]
   });
 }
 
+export async function cmsMoveSegment(segmentId: number, targetChapterId: number): Promise<void> {
+  await apiFetch(`/audio/segments/${segmentId}/move`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target_chapter_id: targetChapterId }),
+  });
+}
+
 export async function cmsFetchAudioBlob(segmentId: number): Promise<string | null> {
   try {
     const res = await apiFetch(`/admin/audio/file/${segmentId}`);
