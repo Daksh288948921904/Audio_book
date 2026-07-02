@@ -302,19 +302,21 @@ export default function ChapterCard({
                 <div className="cc-move-overlay" onClick={() => setMovingSegId(null)}>
                   <div className="cc-move-picker" onClick={e => e.stopPropagation()}>
                     <div className="cc-move-title">Move to section</div>
-                    {moveTargets.map(t => (
-                      <button
-                        key={t.id}
-                        className="cc-move-item"
-                        disabled={movingToId === t.id}
-                        onClick={() => handleMove(t.id)}
-                      >
-                        {movingToId === t.id ? (
-                          <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, borderTopColor: "var(--blue)", display: "inline-block" }} />
-                        ) : "→"}
-                        <span>{t.title || `Chapter ${t.number}`}</span>
-                      </button>
-                    ))}
+                    <div className="cc-move-list">
+                      {moveTargets.map(t => (
+                        <button
+                          key={t.id}
+                          className="cc-move-item"
+                          disabled={movingToId === t.id}
+                          onClick={() => handleMove(t.id)}
+                        >
+                          {movingToId === t.id ? (
+                            <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, borderTopColor: "var(--blue)", display: "inline-block" }} />
+                          ) : "→"}
+                          <span>{t.title || `Chapter ${t.number}`}</span>
+                        </button>
+                      ))}
+                    </div>
                     <button className="cc-move-cancel" onClick={() => setMovingSegId(null)}>Cancel</button>
                   </div>
                 </div>
