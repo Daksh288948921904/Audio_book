@@ -6,6 +6,10 @@ interface Props {
   segment: Segment;
   onDelete: (id: number) => void;
   deleting: boolean;
+  onMove?: (id: number) => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  isDragging?: boolean;
+  isDragOver?: boolean;
 }
 
 const INTENT: Record<string, { color: string; bg: string }> = {
@@ -161,12 +165,12 @@ function AudioPlayerLoader({ segmentId, accentColor }: { segmentId: number; acce
   return <CustomAudioPlayer blobUrl={blobUrl} accentColor={accentColor} />;
 }
 
-export default function SegmentCard({ segment, onDelete, deleting }: Props) {
+export default function SegmentCard({ segment, onDelete, deleting, onMove, dragHandleProps, isDragging, isDragOver }: Props) {
   const s = INTENT[segment.intent?.toLowerCase()] ?? DEF;
 
   return (
     <div
-      className="seg"
+      className={`seg${isDragging ? " seg-dragging" : ""}${isDragOver ? " seg-drag-over" : ""}`}
       style={{
         opacity: deleting ? 0.35 : 1,
         transition: "opacity .2s",
@@ -175,6 +179,14 @@ export default function SegmentCard({ segment, onDelete, deleting }: Props) {
     >
       {/* Header row */}
       <div className="seg-header">
+        {/* Drag handle */}
+        <div className="seg-drag-handle" {...dragHandleProps} title="Drag to reorder">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+            <circle cx="3" cy="2.5" r="1.2"/><circle cx="7" cy="2.5" r="1.2"/>
+            <circle cx="3" cy="7"   r="1.2"/><circle cx="7" cy="7"   r="1.2"/>
+            <circle cx="3" cy="11.5" r="1.2"/><circle cx="7" cy="11.5" r="1.2"/>
+          </svg>
+        </div>
         <div className="seg-num">{segment.order_index}</div>
         <div
           className="seg-badge"
@@ -182,6 +194,13 @@ export default function SegmentCard({ segment, onDelete, deleting }: Props) {
         >
           {segment.intent || "unknown"}
         </div>
+        {onMove && (
+          <button className="seg-move" onClick={() => onMove(segment.id)} title="Move to another section">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+              <path d="M2 6h8M7 3l3 3-3 3"/>
+            </svg>
+          </button>
+        )}
         <button
           className="seg-del"
           onClick={() => !deleting && onDelete(segment.id)}

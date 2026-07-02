@@ -910,6 +910,35 @@ html, body, #root {
   border: 1px solid transparent;
   text-transform: capitalize;
 }
+.seg-drag-handle {
+  cursor: grab;
+  color: var(--text-3);
+  padding: 4px 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity .15s;
+}
+.seg-drag-handle:hover { opacity: 1; }
+.seg-drag-handle:active { cursor: grabbing; }
+
+.seg-move {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  padding: 4px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .15s, background .15s;
+  flex-shrink: 0;
+}
+.seg-move:hover { color: var(--blue); background: rgba(79,142,247,0.1); }
+
 .seg-del {
   margin-left: auto;
   background: none;
@@ -925,6 +954,53 @@ html, body, #root {
   flex-shrink: 0;
 }
 .seg-del:hover { color: var(--rose); background: rgba(248,113,113,0.08); }
+
+.seg.seg-dragging { opacity: 0.35; }
+.seg.seg-drag-over { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(79,142,247,0.25); }
+
+.cc-segs-hint { font-size: 10px; color: var(--text-3); font-weight: 400; margin-left: 6px; }
+
+/* Move picker */
+.cc-move-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .12s;
+}
+.cc-move-picker {
+  background: var(--surface);
+  border: 1px solid var(--border-3);
+  border-radius: 14px;
+  padding: 16px;
+  min-width: 200px;
+  max-width: 280px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  animation: scaleIn .15s both;
+}
+.cc-move-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--text-3); margin-bottom: 10px;
+}
+.cc-move-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-2);
+  border-radius: 8px; margin-bottom: 6px;
+  font-family: var(--font); font-size: 13px; color: var(--text);
+  cursor: pointer; text-align: left;
+  transition: background .12s, border-color .12s;
+}
+.cc-move-item:hover:not(:disabled) { background: rgba(79,142,247,0.1); border-color: var(--blue); }
+.cc-move-item:disabled { opacity: 0.5; cursor: default; }
+.cc-move-cancel {
+  width: 100%; padding: 7px;
+  background: none; border: 1px solid var(--border);
+  border-radius: 8px; margin-top: 4px;
+  font-family: var(--font); font-size: 12px; color: var(--text-3);
+  cursor: pointer; transition: color .12s;
+}
+.cc-move-cancel:hover { color: var(--text); }
 
 /* Transcript text */
 .seg-text {

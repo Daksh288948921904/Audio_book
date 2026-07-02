@@ -1,12 +1,14 @@
 import os
 import tempfile
+from typing import List
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.db import get_db, AudioSegment, Chapter
 from backend.services.pipeline import process_audio_segment
-from backend.services.vector_store import delete_chunk_by_segment
+from backend.services.vector_store import delete_chunk_by_segment, add_chunk, ensure_collection
 from backend.services import storage
 from backend.config import UPLOAD_DIR
 from backend.auth import get_current_user
@@ -135,3 +137,60 @@ def get_audio_file(segment_id: int, db: Session = Depends(get_db), _: dict = _au
     ext = os.path.splitext(segment.filename)[1].lower()
     media_type = _AUDIO_MIME.get(ext, "audio/webm")
     return FileResponse(segment.filename, media_type=media_type)
+
+
+class ReorderBody(BaseModel):
+    chapter_id: int
+    segment_ids: List[int]
+
+
+@router.patch("/segments/reorder")
+def reorder_segments(body: ReorderBody, db: Session = Depends(get_db), _: dict = _auth):
+    chapter = db.query(Chapter).filter(Chapter.id == body.chapter_id).first()
+    if not chapter or chapter.status != "recording":
+        raise HTTPException(status_code=400, detail="Chapter not in recording state")
+    for new_index, seg_id in enumerate(body.segment_ids, start=1):
+        db.query(AudioSegment).filter(
+            AudioSegment.id == seg_id,
+            AudioSegment.chapter_id == body.chapter_id,
+        ).update({"order_index": new_index})
+    db.commit()
+    return {"status": "ok"}
+
+
+class MoveBody(BaseModel):
+    target_chapter_id: int
+
+
+@router.patch("/segments/{segment_id}/move")
+def move_segment(segment_id: int, body: MoveBody, db: Session = Depends(get_db), _: dict = _auth):
+    segment = db.query(AudioSegment).filter(AudioSegment.id == segment_id).first()
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    old_chapter = db.query(Chapter).filter(Chapter.id == segment.chapter_id).first()
+    new_chapter = db.query(Chapter).filter(Chapter.id == body.target_chapter_id).first()
+    if not new_chapter or new_chapter.status != "recording":
+        raise HTTPException(status_code=400, detail="Target chapter not in recording state")
+
+    # Move Qdrant chunk: remove from old collection, add to new
+    try:
+        delete_chunk_by_segment(old_chapter.number, segment_id)
+        ensure_collection(new_chapter.number)
+        add_chunk(new_chapter.number, segment.transcript or "", segment.intent or "informational",
+                  chunk_type="segment", segment_id=segment_id)
+    except Exception:
+        pass  # vector store errors shouldn't block the move
+
+    new_order = db.query(AudioSegment).filter(AudioSegment.chapter_id == body.target_chapter_id).count() + 1
+    segment.chapter_id = body.target_chapter_id
+    segment.order_index = new_order
+    db.commit()
+    db.refresh(segment)
+
+    return {
+        "id": segment.id, "order_index": segment.order_index,
+        "transcript": segment.transcript, "intent": segment.intent,
+        "filename": segment.filename, "has_audio": bool(segment.filename),
+        "chapter_id": segment.chapter_id,
+    }

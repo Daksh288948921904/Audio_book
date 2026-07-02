@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import {
   deleteChapter, reopenChapter,
   updateChapterTitle, deleteSegment,
+  reorderSegments, moveSegment,
   pdfUrl, getChapter, type Chapter, type Segment,
 } from "../api/client";
 import SegmentCard from "./SegmentCard";
@@ -26,16 +27,19 @@ const SECTION_ICONS: Record<string, string> = {
 interface Props {
   chapter: Chapter;
   segments: Segment[];
+  allChapters: Chapter[];
   index: number;
   displayNum: number | null;
   onChapterUpdated: (ch: Chapter) => void;
   onChapterDeleted: (id: number) => void;
   onSegmentDeleted: (chapterId: number, segId: number) => void;
+  onSegmentMoved: (segId: number, fromChapterId: number, toChapterId: number) => void;
   onViewManuscript: (ch: Chapter) => void;
 }
 
 export default function ChapterCard({
-  chapter, segments, index, displayNum, onChapterUpdated, onChapterDeleted, onSegmentDeleted, onViewManuscript,
+  chapter, segments, allChapters, index, displayNum,
+  onChapterUpdated, onChapterDeleted, onSegmentDeleted, onSegmentMoved, onViewManuscript,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(false);
@@ -43,6 +47,70 @@ export default function ChapterCard({
   const [deletingSegs, setDeletingSegs] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+
+  // Drag-and-drop reorder
+  const [localSegs, setLocalSegs] = useState<Segment[]>(segments);
+  const dragIdx = useRef<number | null>(null);
+  const dragOverIdx = useRef<number | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+
+  // Sync local order when segments prop changes (new upload, delete, etc.)
+  if (localSegs.length !== segments.length ||
+      localSegs.some((s, i) => s.id !== segments[i]?.id && !localSegs.find(x => x.id === segments[i]?.id))) {
+    setLocalSegs(segments);
+  }
+
+  function handleDragStart(idx: number, segId: number) {
+    dragIdx.current = idx;
+    setDraggingId(segId);
+  }
+
+  function handleDragOver(e: React.DragEvent, idx: number, segId: number) {
+    e.preventDefault();
+    dragOverIdx.current = idx;
+    setDragOverId(segId);
+  }
+
+  function handleDrop() {
+    const from = dragIdx.current;
+    const to   = dragOverIdx.current;
+    if (from === null || to === null || from === to) {
+      setDraggingId(null); setDragOverId(null); return;
+    }
+    const next = [...localSegs];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    const reindexed = next.map((s, i) => ({ ...s, order_index: i + 1 }));
+    setLocalSegs(reindexed);
+    setDraggingId(null); setDragOverId(null);
+    dragIdx.current = null; dragOverIdx.current = null;
+    reorderSegments(chapter.id, reindexed.map(s => s.id))
+      .catch(() => { setLocalSegs(segments); setError("Reorder failed — reverted."); });
+  }
+
+  function handleDragEnd() {
+    setDraggingId(null); setDragOverId(null);
+    dragIdx.current = null; dragOverIdx.current = null;
+  }
+
+  // Move segment to another chapter
+  const [movingSegId, setMovingSegId] = useState<number | null>(null);
+  const [movingToId, setMovingToId]   = useState<number | null>(null);
+
+  async function handleMove(targetChapterId: number) {
+    if (!movingSegId) return;
+    setMovingToId(targetChapterId);
+    try {
+      await moveSegment(movingSegId, targetChapterId);
+      onSegmentMoved(movingSegId, chapter.id, targetChapterId);
+    } catch (e) { setError(String(e)); }
+    finally { setMovingSegId(null); setMovingToId(null); }
+  }
+
+  const moveTargets = allChapters.filter(
+    c => c.id !== chapter.id && c.status === "recording"
+  );
 
   const isGenerating = chapter.status === "generating";
   const gradient = GRADIENTS[index % GRADIENTS.length];
@@ -200,19 +268,55 @@ export default function ChapterCard({
                 </div>
               )}
 
-              {!isGenerating && segments.length > 0 && (
+              {!isGenerating && localSegs.length > 0 && (
                 <div className="cc-segs-list">
                   <div className="cc-segs-label">
-                    {segments.length} Recording{segments.length !== 1 ? "s" : ""}
+                    {localSegs.length} Recording{localSegs.length !== 1 ? "s" : ""}
+                    {chapter.status === "recording" && (
+                      <span className="cc-segs-hint">· drag to reorder</span>
+                    )}
                   </div>
-                  {segments.map((seg) => (
+                  {localSegs.map((seg, idx) => (
                     <SegmentCard
                       key={seg.id}
                       segment={seg}
                       onDelete={handleDelSeg}
                       deleting={deletingSegs.has(seg.id)}
+                      onMove={chapter.status === "recording" && moveTargets.length > 0 ? setMovingSegId : undefined}
+                      isDragging={draggingId === seg.id}
+                      isDragOver={dragOverId === seg.id}
+                      dragHandleProps={chapter.status === "recording" ? {
+                        draggable: true,
+                        onDragStart: () => handleDragStart(idx, seg.id),
+                        onDragOver:  (e: React.DragEvent) => handleDragOver(e, idx, seg.id),
+                        onDrop:      handleDrop,
+                        onDragEnd:   handleDragEnd,
+                      } : {}}
                     />
                   ))}
+                </div>
+              )}
+
+              {/* Move picker overlay */}
+              {movingSegId && (
+                <div className="cc-move-overlay" onClick={() => setMovingSegId(null)}>
+                  <div className="cc-move-picker" onClick={e => e.stopPropagation()}>
+                    <div className="cc-move-title">Move to section</div>
+                    {moveTargets.map(t => (
+                      <button
+                        key={t.id}
+                        className="cc-move-item"
+                        disabled={movingToId === t.id}
+                        onClick={() => handleMove(t.id)}
+                      >
+                        {movingToId === t.id ? (
+                          <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, borderTopColor: "var(--blue)", display: "inline-block" }} />
+                        ) : "→"}
+                        <span>{t.title || `Chapter ${t.number}`}</span>
+                      </button>
+                    ))}
+                    <button className="cc-move-cancel" onClick={() => setMovingSegId(null)}>Cancel</button>
+                  </div>
                 </div>
               )}
 

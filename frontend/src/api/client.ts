@@ -191,6 +191,25 @@ export async function getSegments(chapterId: number): Promise<Segment[]> {
   return res.json();
 }
 
+export async function reorderSegments(chapterId: number, segmentIds: number[]): Promise<void> {
+  const res = await fetch(`${BASE}/audio/segments/reorder`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ chapter_id: chapterId, segment_ids: segmentIds }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function moveSegment(segmentId: number, targetChapterId: number): Promise<Segment> {
+  const res = await fetch(`${BASE}/audio/segments/${segmentId}/move`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ target_chapter_id: targetChapterId }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function deleteSegment(segmentId: number): Promise<void> {
   const res = await fetch(`${BASE}/audio/segments/${segmentId}`, {
     method: "DELETE",

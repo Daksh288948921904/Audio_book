@@ -146,6 +146,16 @@ export default function App() {
     setSegsMap((prev) => ({ ...prev, [chapterId]: (prev[chapterId] ?? []).filter((s) => s.id !== segId) }));
   }
 
+  function handleSegmentMoved(segId: number, fromChapterId: number, toChapterId: number) {
+    setSegsMap((prev) => {
+      const seg = (prev[fromChapterId] ?? []).find((s) => s.id === segId);
+      if (!seg) return prev;
+      const fromSegs = (prev[fromChapterId] ?? []).filter((s) => s.id !== segId);
+      const toSegs   = [...(prev[toChapterId] ?? []), { ...seg, chapter_id: toChapterId }];
+      return { ...prev, [fromChapterId]: fromSegs, [toChapterId]: toSegs };
+    });
+  }
+
   async function handleViewManuscript(ch: Chapter) {
     setViewingChapter(ch.generated_text ? ch : await import("./api/client").then(({ getChapter }) => getChapter(ch.id)));
   }
@@ -342,9 +352,10 @@ export default function App() {
                     <div className="chapter-list">
                       {frontMatter.map((ch, i) => (
                         <ChapterCard key={ch.id} chapter={ch} segments={segsMap[ch.id] ?? []}
-                          index={i} displayNum={displayNum(ch)}
+                          allChapters={chapters} index={i} displayNum={displayNum(ch)}
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
-                          onSegmentDeleted={handleSegmentDeleted} onViewManuscript={handleViewManuscript} />
+                          onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
+                          onViewManuscript={handleViewManuscript} />
                       ))}
                     </div>
                   </>
@@ -358,9 +369,10 @@ export default function App() {
                 <div className="chapter-list">
                   {mainChapters.map((ch, i) => (
                     <ChapterCard key={ch.id} chapter={ch} segments={segsMap[ch.id] ?? []}
-                      index={i} displayNum={displayNum(ch)}
+                      allChapters={chapters} index={i} displayNum={displayNum(ch)}
                       onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
-                      onSegmentDeleted={handleSegmentDeleted} onViewManuscript={handleViewManuscript} />
+                      onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
+                      onViewManuscript={handleViewManuscript} />
                   ))}
                 </div>
 
@@ -373,9 +385,10 @@ export default function App() {
                     <div className="chapter-list">
                       {backMatter.map((ch, i) => (
                         <ChapterCard key={ch.id} chapter={ch} segments={segsMap[ch.id] ?? []}
-                          index={i} displayNum={displayNum(ch)}
+                          allChapters={chapters} index={i} displayNum={displayNum(ch)}
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
-                          onSegmentDeleted={handleSegmentDeleted} onViewManuscript={handleViewManuscript} />
+                          onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
+                          onViewManuscript={handleViewManuscript} />
                       ))}
                     </div>
                   </>
