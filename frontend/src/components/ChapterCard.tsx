@@ -112,6 +112,20 @@ export default function ChapterCard({
     c => c.id !== chapter.id && c.status === "recording"
   );
 
+  // Build 1-based display numbers for main chapters only
+  const chapterDisplayNums = new Map<number, number>();
+  let _n = 0;
+  allChapters
+    .filter(c => c.section_type === "chapter")
+    .sort((a, b) => a.number - b.number)
+    .forEach(c => { chapterDisplayNums.set(c.id, ++_n); });
+
+  function moveTargetLabel(t: typeof allChapters[0]): string {
+    if (t.section_type !== "chapter") return t.title ?? "Section";
+    const num = chapterDisplayNums.get(t.id);
+    return t.title ? `${t.title}` : `Chapter ${num ?? t.number}`;
+  }
+
   const isGenerating = chapter.status === "generating";
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const statusLabel = isGenerating ? "Writing" : chapter.status === "done" ? "Complete" : "Recording";
@@ -313,7 +327,7 @@ export default function ChapterCard({
                           {movingToId === t.id ? (
                             <span className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, borderTopColor: "var(--blue)", display: "inline-block" }} />
                           ) : "→"}
-                          <span>{t.title || `Chapter ${t.number}`}</span>
+                          <span>{moveTargetLabel(t)}</span>
                         </button>
                       ))}
                     </div>
