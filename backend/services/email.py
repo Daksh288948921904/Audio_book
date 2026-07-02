@@ -1,12 +1,8 @@
 import os
-import smtplib
-from email import encoders
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import resend
 
-GMAIL_USER     = os.getenv("GMAIL_USER", "")
-GMAIL_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+FROM_EMAIL     = os.getenv("EMAIL_FROM", "AudioBook Studio <onboarding@resend.dev>")
 SITE_URL       = os.getenv("SITE_URL", "https://books.rig360media.com")
 
 
@@ -17,9 +13,10 @@ def send_chapter_ready(
     book_title: str,
     pdf_bytes: bytes,
 ) -> None:
-    if not GMAIL_USER or not GMAIL_PASSWORD:
+    if not RESEND_API_KEY:
         return
 
+    resend.api_key = RESEND_API_KEY
     display_name = to_name or to_email.split("@")[0]
 
     html = f"""<!DOCTYPE html>
@@ -70,22 +67,15 @@ def send_chapter_ready(
 </body>
 </html>"""
 
-    msg = MIMEMultipart("mixed")
-    msg["From"]    = f"AudioBook Studio <{GMAIL_USER}>"
-    msg["To"]      = to_email
-    msg["Subject"] = f'"{chapter_title}" is published — {book_title}'
-
-    msg.attach(MIMEText(html, "html"))
-
     safe = "".join(c for c in chapter_title if c.isalnum() or c in " _-").strip() or "chapter"
-    pdf_part = MIMEBase("application", "pdf")
-    pdf_part.set_payload(pdf_bytes)
-    encoders.encode_base64(pdf_part)
-    pdf_part.add_header("Content-Disposition", f'attachment; filename="{safe}.pdf"')
-    msg.attach(pdf_part)
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.login(GMAIL_USER, GMAIL_PASSWORD)
-        smtp.sendmail(GMAIL_USER, to_email, msg.as_string())
+    resend.Emails.send({
+        "from": FROM_EMAIL,
+        "to": [to_email],
+        "subject": f'"{chapter_title}" is published — {book_title}',
+        "html": html,
+        "attachments": [{
+            "filename": f"{safe}.pdf",
+            "content": list(pdf_bytes),
+        }],
+    })
