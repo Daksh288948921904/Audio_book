@@ -228,7 +228,19 @@ function ChapterSegmentsPanel({
   }, [chapter.id]);
 
   const canReorder = chapter.status === "recording";
-  const moveTargets = allChapters.filter(c => c.id !== chapter.id && c.status === "recording");
+  const moveTargets = allChapters.filter(c => c.id !== chapter.id);
+
+  const numberedIds = allChapters
+    .filter(c => c.section_type === "chapter" && c.title !== "Prologue" && c.title !== "Epilogue")
+    .sort((a, b) => a.number - b.number)
+    .map(c => c.id);
+
+  function moveTargetLabel(t: CmsChapter): string {
+    if (t.section_type !== "chapter") return t.title ?? "Section";
+    if (t.title === "Prologue" || t.title === "Epilogue") return t.title;
+    const idx = numberedIds.indexOf(t.id);
+    return idx === -1 ? (t.title ?? `Chapter ${t.number}`) : `Chapter ${idx + 1}`;
+  }
 
   async function handleMove(targetChapterId: number) {
     if (!movingSegId) return;
@@ -322,7 +334,7 @@ function ChapterSegmentsPanel({
                       {movingToId === t.id
                         ? <div className="cms-spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
                         : "→"}
-                      <span>{t.title || `Chapter ${t.number}`}</span>
+                      <span>{moveTargetLabel(t)}</span>
                     </button>
                   ))}
                 </div>

@@ -108,9 +108,7 @@ export default function ChapterCard({
     finally { setMovingSegId(null); setMovingToId(null); }
   }
 
-  const moveTargets = allChapters.filter(
-    c => c.id !== chapter.id && c.status === "recording"
-  );
+  const moveTargets = allChapters.filter(c => c.id !== chapter.id);
 
   // Mirrors App.tsx displayNum logic: exclude Prologue/Epilogue from the count
   const numberedIds = allChapters
