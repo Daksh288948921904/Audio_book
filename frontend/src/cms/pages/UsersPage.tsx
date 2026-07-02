@@ -137,12 +137,19 @@ export default function UsersPage({ onSelect }: Props) {
                 {/* Book count */}
                 <div className="up-books" style={{ width: 100 }}>
                   {u.book_count > 0 ? (
-                    <div className="up-books-badge">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
-                        <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
-                        <path d="M3.5 4h5M3.5 6h5M3.5 8h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                      </svg>
-                      {u.book_count} book{u.book_count !== 1 ? "s" : ""}
+                    <div className="up-books-tip-wrap">
+                      <div className="up-books-badge">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
+                          <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
+                          <path d="M3.5 4h5M3.5 6h5M3.5 8h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                        </svg>
+                        {u.book_count} book{u.book_count !== 1 ? "s" : ""}
+                      </div>
+                      <div className="up-books-tooltip">
+                        {(u.book_titles ?? []).map((t, i) => (
+                          <div key={i} className="up-books-tooltip-item">📖 {t}</div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <span className="up-no-books">No books</span>

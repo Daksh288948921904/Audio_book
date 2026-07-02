@@ -83,16 +83,51 @@ def list_users(db: Session = Depends(get_db), _: dict = _admin):
     users = db.query(User).order_by(User.created_at).all()
     result = []
     for u in users:
-        book_count = db.query(Book).filter(Book.user_id == u.google_id).count()
+        books = db.query(Book).filter(Book.user_id == u.google_id).all()
         result.append({
-            "id":         u.id,
-            "google_id":  u.google_id,
-            "name":       u.name,
-            "email":      u.email,
-            "book_count": book_count,
-            "created_at": u.created_at,
+            "id":          u.id,
+            "google_id":   u.google_id,
+            "name":        u.name,
+            "email":       u.email,
+            "book_count":  len(books),
+            "book_titles": [b.title for b in books],
+            "created_at":  u.created_at,
         })
     return result
+
+
+@router.get("/search")
+def search(q: str = "", db: Session = Depends(get_db), _: dict = _admin):
+    if not q.strip():
+        return {"users": [], "books": []}
+    term = f"%{q.lower()}%"
+
+    matched_users = (
+        db.query(User)
+        .filter(
+            (User.name.ilike(term)) | (User.email.ilike(term))
+        )
+        .limit(8).all()
+    )
+    matched_books = (
+        db.query(Book, User)
+        .join(User, User.google_id == Book.user_id)
+        .filter(Book.title.ilike(term))
+        .limit(8).all()
+    )
+
+    return {
+        "users": [
+            {"google_id": u.google_id, "name": u.name, "email": u.email}
+            for u in matched_users
+        ],
+        "books": [
+            {"id": b.id, "title": b.title, "genre": b.genre or "fiction",
+             "owner_name": u.name, "owner_email": u.email,
+             "owner_google_id": u.google_id}
+            for b, u in matched_books
+        ],
+    }
 
 
 @router.get("/users/{google_id}/books")

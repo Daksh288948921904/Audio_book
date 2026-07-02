@@ -21,7 +21,13 @@ export interface CmsUser {
   name: string | null;
   email: string;
   book_count: number;
+  book_titles: string[];
   created_at: string;
+}
+
+export interface SearchResult {
+  users: { google_id: string; name: string | null; email: string }[];
+  books: { id: number; title: string; genre: string; owner_name: string | null; owner_email: string; owner_google_id: string }[];
 }
 
 export interface CmsBook {
@@ -72,6 +78,10 @@ export async function getAdminMe(): Promise<{ sub: string; email: string; name: 
 // ── Admin API ──────────────────────────────────────────────────────────────────
 export async function cmsListUsers(): Promise<CmsUser[]> {
   return (await apiFetch("/admin/users")).json();
+}
+
+export async function cmsSearch(q: string): Promise<SearchResult> {
+  return (await apiFetch(`/admin/search?q=${encodeURIComponent(q)}`)).json();
 }
 
 export async function cmsListBooks(googleId: string): Promise<CmsBook[]> {
