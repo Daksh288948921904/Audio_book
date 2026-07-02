@@ -2,10 +2,11 @@ import os
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
-from backend.db import Chapter, AudioSegment
+from backend.db import Chapter, AudioSegment, Book, User
 from backend.services import transcription, intent, vector_store, llm
 from backend.services.audio_preprocess import preprocess_audio
 from backend.services.pdf import generate_pdf
+from backend.services import email as email_svc
 
 
 def process_audio_segment(db: Session, chapter_id: int, audio_path: str, order_index: int) -> AudioSegment:
@@ -107,4 +108,21 @@ def finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
         )
 
     pdf_bytes = generate_pdf(chapter.number, chapter.title, generated_text)
+
+    # Email the owner — fire and forget; never block chapter generation on email failure
+    try:
+        book = db.query(Book).filter(Book.id == chapter.book_id).first()
+        if book:
+            user = db.query(User).filter(User.google_id == book.user_id).first()
+            if user:
+                email_svc.send_chapter_ready(
+                    to_email=user.email,
+                    to_name=user.name,
+                    chapter_title=chapter.title or f"Chapter {chapter.number}",
+                    book_title=book.title,
+                    pdf_bytes=pdf_bytes,
+                )
+    except Exception:
+        pass
+
     return generated_text, pdf_bytes
