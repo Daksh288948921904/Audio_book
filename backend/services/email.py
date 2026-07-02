@@ -86,7 +86,7 @@ def send_chapter_ready(
     pdf_part.add_header("Content-Disposition", f'attachment; filename="{safe}.pdf"')
     msg.attach(pdf_part)
 
-    with smtplib.SMTP("smtp-relay.brevo.com", 587) as smtp:
+    with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=15) as smtp:
         smtp.ehlo()
         smtp.starttls()
         smtp.login(BREVO_USER, BREVO_KEY)

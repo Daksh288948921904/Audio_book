@@ -109,19 +109,21 @@ def finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
 
     pdf_bytes = generate_pdf(chapter.number, chapter.title, generated_text)
 
-    # Email the owner — fire and forget; never block chapter generation on email failure
+    # Email the owner in a background thread — never blocks chapter generation
     try:
+        import threading
         book = db.query(Book).filter(Book.id == chapter.book_id).first()
         if book:
             user = db.query(User).filter(User.google_id == book.user_id).first()
             if user:
-                email_svc.send_chapter_ready(
+                kwargs = dict(
                     to_email=user.email,
                     to_name=user.name,
                     chapter_title=chapter.title or f"Chapter {chapter.number}",
                     book_title=book.title,
                     pdf_bytes=pdf_bytes,
                 )
+                threading.Thread(target=email_svc.send_chapter_ready, kwargs=kwargs, daemon=True).start()
     except Exception:
         pass
 
