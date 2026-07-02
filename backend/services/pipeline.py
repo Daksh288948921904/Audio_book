@@ -59,8 +59,41 @@ def finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
     chapter.status = "generating"
     db.commit()
 
-    # Retrieve all chunks (live segments + previous chapter summary chunks)
+    # Retrieve chunks from Qdrant. If empty (e.g. after server restart wipes
+    # in-memory Qdrant), rebuild the collection from DB transcripts first.
     chunks = vector_store.retrieve_all_chunks(chapter.number)
+    if not chunks:
+        segs = (
+            db.query(AudioSegment)
+            .filter(AudioSegment.chapter_id == chapter_id)
+            .order_by(AudioSegment.order_index)
+            .all()
+        )
+        if segs:
+            vector_store.ensure_collection(chapter.number)
+            for seg in segs:
+                if seg.transcript:
+                    vector_store.add_chunk(
+                        chapter_number=chapter.number,
+                        text=seg.transcript,
+                        intent=seg.intent or "informational",
+                        chunk_type="segment",
+                        segment_id=seg.id,
+                    )
+            prev_chapters = (
+                db.query(Chapter)
+                .filter(Chapter.number < chapter.number, Chapter.summary.isnot(None))
+                .order_by(Chapter.number)
+                .all()
+            )
+            for prev in prev_chapters:
+                vector_store.add_chunk(
+                    chapter_number=chapter.number,
+                    text=prev.summary,
+                    intent="informational",
+                    chunk_type="summary",
+                )
+            chunks = vector_store.retrieve_all_chunks(chapter.number)
 
     # Sort live segments by segment_id to preserve recording order
     chunks.sort(key=lambda c: (c.get("type") != "summary", c.get("segment_id") or 0))
