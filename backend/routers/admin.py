@@ -265,6 +265,34 @@ def generate_tts(chapter_id: int, body: TtsRequest, db: Session = Depends(get_db
     )
 
 
+@router.post("/chapters/{chapter_id}/send-email")
+def send_chapter_email(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin):
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    if chapter.status != "done" or not chapter.generated_text:
+        raise HTTPException(status_code=400, detail="Chapter not yet generated")
+    book = db.query(Book).filter(Book.id == chapter.book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    user = db.query(User).filter(User.google_id == book.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    from backend.services import email as email_svc
+    pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text)
+    try:
+        email_svc.send_chapter_ready(
+            to_email=user.email,
+            to_name=user.name,
+            chapter_title=chapter.title or f"Chapter {chapter.number}",
+            book_title=book.title,
+            pdf_bytes=pdf_bytes,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email failed: {e}")
+    return {"status": "sent", "to": user.email}
+
+
 @router.patch("/chapters/{chapter_id}/text")
 def update_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db), _: dict = _admin):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()

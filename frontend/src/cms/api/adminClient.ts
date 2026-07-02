@@ -134,6 +134,10 @@ export async function cmsFetchAudioBlob(segmentId: number): Promise<string | nul
   }
 }
 
+export async function cmsSendChapterEmail(chapterId: number): Promise<{ status: string; to: string }> {
+  return (await apiFetch(`/admin/chapters/${chapterId}/send-email`, { method: "POST" })).json();
+}
+
 export async function cmsUpdateChapterText(chapterId: number, text: string): Promise<void> {
   await apiFetch(`/admin/chapters/${chapterId}/text`, {
     method: "PATCH",

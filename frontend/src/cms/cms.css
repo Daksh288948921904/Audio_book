@@ -390,6 +390,15 @@ html, body { background: var(--bg); color: var(--text-1); font-family: -apple-sy
 
 .cms-ms-body { flex: 1; overflow-y: auto; padding: 32px 36px; }
 .cms-ms-body p { font-size: 15px; line-height: 1.85; margin-bottom: 18px; color: var(--text-1); }
+
+.cms-ms-footer {
+  flex-shrink: 0; padding: 16px 22px;
+  border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px;
+}
+.cms-email-btn { gap: 6px; }
+.cms-email-sent {
+  font-size: 13px; color: var(--green); font-weight: 600;
+}
 .cms-ms-editor {
   width: 100%; min-height: 420px; background: var(--surface2);
   border: 1px solid var(--border2); border-radius: 10px;

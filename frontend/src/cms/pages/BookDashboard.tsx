@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   cmsListChapters, cmsGetSegments, cmsCompileBook, cmsUpdateChapterText, cmsDownloadPdf,
-  cmsFetchAudioBlob, cmsReorderSegments, cmsMoveSegment,
+  cmsFetchAudioBlob, cmsReorderSegments, cmsMoveSegment, cmsSendChapterEmail,
   type CmsChapter, type CmsBook, type CmsUser, type CmsSegment, type CompileResult,
 } from "../api/adminClient";
 import AdminChapterCard from "../components/AdminChapterCard";
@@ -23,6 +23,8 @@ function ManuscriptPanel({
   const [draft,   setDraft]     = useState(chapter.generated_text ?? "");
   const [saving,  setSaving]    = useState(false);
   const [saveErr, setSaveErr]   = useState<string | null>(null);
+  const [sending, setSending]   = useState(false);
+  const [sentTo,  setSentTo]    = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const heading = chapter.section_type !== "chapter"
@@ -58,6 +60,17 @@ function ManuscriptPanel({
   async function handlePdf() {
     try { await cmsDownloadPdf(chapter.id, chapter.number); }
     catch (e) { setSaveErr(String(e)); }
+  }
+
+  async function handleSendEmail() {
+    setSending(true);
+    setSentTo(null);
+    setSaveErr(null);
+    try {
+      const res = await cmsSendChapterEmail(chapter.id);
+      setSentTo(res.to);
+    } catch (e) { setSaveErr(String(e)); }
+    finally { setSending(false); }
   }
 
   return (
@@ -107,6 +120,22 @@ function ManuscriptPanel({
             />
           ) : (
             paragraphs.map((p, i) => <p key={i}>{p}</p>)
+          )}
+        </div>
+
+        <div className="cms-ms-footer">
+          {sentTo ? (
+            <div className="cms-email-sent">✓ Email sent to {sentTo}</div>
+          ) : (
+            <button
+              className="cms-btn cms-btn-primary cms-email-btn"
+              onClick={handleSendEmail}
+              disabled={sending || editing}
+            >
+              {sending
+                ? <><div className="cms-spinner" style={{ width: 12, height: 12 }} /> Sending…</>
+                : "✉ Send Email to Author"}
+            </button>
           )}
         </div>
       </div>
