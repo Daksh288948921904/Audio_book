@@ -112,18 +112,17 @@ export default function ChapterCard({
     c => c.id !== chapter.id && c.status === "recording"
   );
 
-  // Build 1-based display numbers for main chapters only
-  const chapterDisplayNums = new Map<number, number>();
-  let _n = 0;
-  allChapters
-    .filter(c => c.section_type === "chapter")
+  // Mirrors App.tsx displayNum logic: exclude Prologue/Epilogue from the count
+  const numberedIds = allChapters
+    .filter(c => c.section_type === "chapter" && c.title !== "Prologue" && c.title !== "Epilogue")
     .sort((a, b) => a.number - b.number)
-    .forEach(c => { chapterDisplayNums.set(c.id, ++_n); });
+    .map(c => c.id);
 
   function moveTargetLabel(t: typeof allChapters[0]): string {
     if (t.section_type !== "chapter") return t.title ?? "Section";
-    const num = chapterDisplayNums.get(t.id);
-    return t.title ? `${t.title}` : `Chapter ${num ?? t.number}`;
+    if (t.title === "Prologue" || t.title === "Epilogue") return t.title;
+    const idx = numberedIds.indexOf(t.id);
+    return idx === -1 ? (t.title ?? `Chapter ${t.number}`) : `Chapter ${idx + 1}`;
   }
 
   const isGenerating = chapter.status === "generating";
