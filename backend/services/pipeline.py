@@ -1,6 +1,9 @@
+import logging
 import os
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
+
+log = logging.getLogger(__name__)
 
 from backend.db import Chapter, AudioSegment, Book, User
 from backend.services import transcription, intent, vector_store, llm
@@ -156,8 +159,13 @@ def finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
                     book_title=book.title,
                     pdf_bytes=pdf_bytes,
                 )
-                threading.Thread(target=email_svc.send_chapter_ready, kwargs=kwargs, daemon=True).start()
-    except Exception:
-        pass
+                def _send(**kw):
+                    try:
+                        email_svc.send_chapter_ready(**kw)
+                    except Exception as exc:
+                        log.error("Auto-email failed for chapter %s: %s", chapter.id, exc)
+                threading.Thread(target=_send, kwargs=kwargs, daemon=True).start()
+    except Exception as exc:
+        log.error("Failed to dispatch email thread for chapter %s: %s", chapter.id, exc)
 
     return generated_text, pdf_bytes

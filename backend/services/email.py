@@ -1,9 +1,13 @@
+import logging
 import os
 import smtplib
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import parseaddr
+
+log = logging.getLogger(__name__)
 
 BREVO_USER = os.getenv("BREVO_SMTP_USER", "")
 BREVO_KEY  = os.getenv("BREVO_SMTP_KEY", "")
@@ -78,7 +82,7 @@ def send_chapter_ready(
     msg["From"]    = from_addr
     msg["To"]      = to_email
     msg["Subject"] = f'"{chapter_title}" is published — {book_title}'
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
 
     pdf_part = MIMEBase("application", "pdf")
     pdf_part.set_payload(pdf_bytes)
@@ -86,8 +90,15 @@ def send_chapter_ready(
     pdf_part.add_header("Content-Disposition", f'attachment; filename="{safe}.pdf"')
     msg.attach(pdf_part)
 
+    # Use the actual From address as the envelope sender so Brevo validates
+    # it against your verified senders, not the technical SMTP login.
+    _, envelope_from = parseaddr(from_addr)
+    if not envelope_from:
+        envelope_from = BREVO_USER
+
     with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=15) as smtp:
         smtp.ehlo()
         smtp.starttls()
         smtp.login(BREVO_USER, BREVO_KEY)
-        smtp.sendmail(BREVO_USER, to_email, msg.as_string())
+        smtp.sendmail(envelope_from, to_email, msg.as_string())
+        log.info("Email sent to %s for chapter '%s'", to_email, chapter_title)
