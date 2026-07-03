@@ -21,15 +21,21 @@ def _sanitize(text: str) -> str:
     return normalized.encode("latin-1", errors="ignore").decode("latin-1")
 
 
-def generate_pdf(chapter_number: int, title: str | None, text: str) -> bytes:
+def generate_pdf(chapter_number: int, title: str | None, text: str, display_number: int | None = None) -> bytes:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
 
-    heading = _sanitize(title if title else f"Chapter {chapter_number}")
-    heading_full = f"Chapter {chapter_number}: {heading}" if title else f"Chapter {chapter_number}"
+    num = display_number if display_number is not None else chapter_number
+    if display_number is None and title:
+        # Front matter / special sections (Prologue, Epilogue, Dedication, etc.) — just the title
+        heading_full = _sanitize(title)
+    elif title:
+        heading_full = _sanitize(f"Chapter {num}: {title}")
+    else:
+        heading_full = f"Chapter {num}"
+    heading = heading_full  # kept for local reference
 
-    # Heading
     pdf.set_font("Helvetica", "B", 22)
     pdf.cell(0, 14, heading_full, ln=True, align="C")
     pdf.ln(10)

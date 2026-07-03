@@ -76,11 +76,15 @@ def finish(chapter_id: int, db: Session = Depends(get_db), _: dict = Depends(req
         raise HTTPException(status_code=404, detail="Chapter not found")
     if chapter.status == "done":
         raise HTTPException(status_code=400, detail="Chapter is already done")
-    # Reset chapters stuck in "generating" (e.g. from a previous timed-out attempt)
+    # If stuck in "generating" after a server restart, reset so it can retry.
+    # If actively generating (lock held), finish_chapter raises RuntimeError → 409.
     if chapter.status == "generating":
         chapter.status = "recording"
         db.commit()
-    generated_text, _ = finish_chapter(db, chapter_id)
+    try:
+        generated_text, _ = finish_chapter(db, chapter_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     return {"status": "done", "generated_text": generated_text}
 
 

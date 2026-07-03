@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import get_db, User, Book, Chapter, AudioSegment
 from backend.auth import require_admin
-from backend.services.pipeline import finish_chapter
+from backend.services.pipeline import finish_chapter, _display_number
 from backend.services.pdf import generate_pdf
 from backend.services import storage
 
@@ -236,8 +236,9 @@ def download_pdf(chapter_id: int, db: Session = Depends(get_db), _: dict = _admi
         raise HTTPException(status_code=404, detail="Chapter not found")
     if chapter.status != "done" or not chapter.generated_text:
         raise HTTPException(status_code=400, detail="Chapter not yet generated")
-    pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text)
-    filename = f"chapter_{chapter.number}.pdf"
+    disp_num = _display_number(chapter, db)
+    pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text, display_number=disp_num)
+    filename = f"chapter_{disp_num or chapter.number}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -279,7 +280,8 @@ def send_chapter_email(chapter_id: int, db: Session = Depends(get_db), _: dict =
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     from backend.services import email as email_svc
-    pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text)
+    disp_num = _display_number(chapter, db)
+    pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text, display_number=disp_num)
     try:
         email_svc.send_chapter_ready(
             to_email=user.email,

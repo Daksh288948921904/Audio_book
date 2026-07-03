@@ -1,11 +1,30 @@
 import logging
 import os
+import threading
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
 from backend.db import Chapter, AudioSegment, Book, User
+
+_SPECIAL_TITLES = {"Prologue", "Epilogue"}
+_active_generations: set[int] = set()
+_active_lock = threading.Lock()
+
+
+def _display_number(chapter: Chapter, db: Session) -> int | None:
+    """1-based display number for regular chapters; None for front/back matter and special titles."""
+    if chapter.section_type != "chapter" or chapter.title in _SPECIAL_TITLES:
+        return None
+    all_chs = (
+        db.query(Chapter)
+        .filter(Chapter.book_id == chapter.book_id, Chapter.section_type == "chapter")
+        .order_by(Chapter.number)
+        .all()
+    )
+    main = [c for c in all_chs if c.title not in _SPECIAL_TITLES]
+    return next((i + 1 for i, c in enumerate(main) if c.id == chapter.id), None)
 from backend.services import transcription, intent, vector_store, llm
 from backend.services.audio_preprocess import preprocess_audio
 from backend.services.pdf import generate_pdf
@@ -58,6 +77,19 @@ def finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
     Generates the chapter text, creates a summary, wipes the Qdrant collection,
     and returns (generated_text, pdf_bytes).
     """
+    with _active_lock:
+        if chapter_id in _active_generations:
+            raise RuntimeError(f"Chapter {chapter_id} is already generating — duplicate request ignored")
+        _active_generations.add(chapter_id)
+
+    try:
+        return _do_finish_chapter(db, chapter_id)
+    finally:
+        with _active_lock:
+            _active_generations.discard(chapter_id)
+
+
+def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     chapter.status = "generating"
     db.commit()
@@ -143,11 +175,11 @@ def finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
             chunk_type="summary",
         )
 
-    pdf_bytes = generate_pdf(chapter.number, chapter.title, generated_text)
+    disp_num = _display_number(chapter, db)
+    pdf_bytes = generate_pdf(chapter.number, chapter.title, generated_text, display_number=disp_num)
 
     # Email the owner in a background thread — never blocks chapter generation
     try:
-        import threading
         book = db.query(Book).filter(Book.id == chapter.book_id).first()
         if book:
             user = db.query(User).filter(User.google_id == book.user_id).first()
