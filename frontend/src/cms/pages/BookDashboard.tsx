@@ -234,11 +234,12 @@ function SegmentRow({
 
 // ── Chapter detail side panel (segments view) ──────────────────────────────────
 function ChapterSegmentsPanel({
-  chapter, allChapters, onClose,
+  chapter, allChapters, onClose, onSegmentMoved,
 }: {
   chapter: CmsChapter;
   allChapters: CmsChapter[];
   onClose: () => void;
+  onSegmentMoved: (seg: CmsSegment, targetChapterId: number) => void;
 }) {
   const [segs, setSegs]       = useState<CmsSegment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -281,7 +282,9 @@ function ChapterSegmentsPanel({
     setMovingToId(targetChapterId);
     try {
       await cmsMoveSegment(movingSegId, targetChapterId);
+      const moved = segs.find(s => s.id === movingSegId);
       setSegs(prev => prev.filter(s => s.id !== movingSegId));
+      if (moved) onSegmentMoved(moved, targetChapterId);
     } catch (e) { setError(String(e)); }
     finally { setMovingSegId(null); setMovingToId(null); }
   }
@@ -414,6 +417,15 @@ export default function BookDashboard({ user, book }: Props) {
   function handleChapterUpdated(ch: CmsChapter) {
     setChapters((prev) => prev.map((c) => c.id === ch.id ? ch : c));
     if (viewMs?.id === ch.id) setViewMs(ch);
+  }
+
+  function handleSegmentMoved(seg: CmsSegment, targetChapterId: number) {
+    if (!viewSegs) return;
+    setSegsMap((prev) => ({
+      ...prev,
+      [viewSegs.id]:   (prev[viewSegs.id]   ?? []).filter(s => s.id !== seg.id),
+      [targetChapterId]: [...(prev[targetChapterId] ?? []), seg],
+    }));
   }
 
   async function handleCompileAll() {
@@ -609,6 +621,7 @@ export default function BookDashboard({ user, book }: Props) {
           chapter={viewSegs}
           allChapters={chapters}
           onClose={() => setViewSegs(null)}
+          onSegmentMoved={handleSegmentMoved}
         />
       )}
     </>
