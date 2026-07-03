@@ -110,7 +110,7 @@ function VoicePlayer({ text }: { text: string }) {
       </button>
 
       <div className="vp-label">
-        {!started ? "AI Narrator" : playing ? "Reading…" : "Paused"}
+        {!started ? "Narrator" : playing ? "Reading…" : "Paused"}
       </div>
 
       {/* Progress bar — word boundary driven */}
