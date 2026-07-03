@@ -128,7 +128,7 @@ export default function ChapterCard({
   const statusLabel = isGenerating ? "Writing" : chapter.status === "done" ? "Complete" : "Recording";
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${chapter.title || `Chapter ${chapter.number}`}"? Cannot be undone.`)) return;
+    if (!window.confirm(`Delete "${chapter.title || `Chapter ${displayNum ?? chapter.number}`}"? Cannot be undone.`)) return;
     try {
       await deleteChapter(chapter.id);
       onChapterDeleted(chapter.id);
@@ -170,7 +170,7 @@ export default function ChapterCard({
     e.stopPropagation();
     const a = document.createElement("a");
     a.href = pdfUrl(chapter.id);
-    a.download = `chapter_${chapter.number}.pdf`;
+    a.download = `chapter_${displayNum ?? chapter.number}.pdf`;
     a.click();
   }
 
@@ -208,7 +208,7 @@ export default function ChapterCard({
 
         <div className="cc-foot">
           <div className="cc-foot-title">
-            {chapter.title || `Chapter ${chapter.number}`}
+            {chapter.title || `Chapter ${displayNum ?? chapter.number}`}
           </div>
           <div className="cc-foot-meta">
             {segments.length} recording{segments.length !== 1 ? "s" : ""}

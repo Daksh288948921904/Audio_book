@@ -417,15 +417,15 @@ export default function App() {
           <div className="ms-bar">
             <div className="ms-bar-title">
               {viewingChapter.title
-                ? `Chapter ${viewingChapter.number}: ${viewingChapter.title}`
-                : `Chapter ${viewingChapter.number}`}
+                ? `Chapter ${displayNum(viewingChapter) ?? viewingChapter.number}: ${viewingChapter.title}`
+                : `Chapter ${displayNum(viewingChapter) ?? viewingChapter.number}`}
             </div>
           </div>
           <div className="ms-body">
             <ChapterViewer
               chapterId={viewingChapter.id}
-              chapterNumber={viewingChapter.number}
-              title={viewingChapter.title}
+              chapterNumber={displayNum(viewingChapter) ?? viewingChapter.number}
+              title={viewingChapter.title ?? null}
               text={viewingChapter.generated_text}
               summary={viewingChapter.summary ?? ""}
               onClose={() => setViewingChapter(null)}
