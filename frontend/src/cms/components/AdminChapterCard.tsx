@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { cmsFinishChapter, cmsGetChapter, cmsDownloadPdf, type CmsChapter, type CmsSegment } from "../api/adminClient";
+import { cmsFinishChapter, cmsDownloadPdf, type CmsChapter, type CmsSegment } from "../api/adminClient";
 
 const SECTION_ICONS: Record<string, string> = {
   "Dedication": "💌", "Epigraph": "💬", "Foreword": "✍", "Preface": "📝",
@@ -63,9 +63,8 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
     setWriting(true);
     setError(null);
     try {
-      const r    = await cmsFinishChapter(chapter.id);
-      const full = await cmsGetChapter(chapter.id);
-      onUpdated({ ...full, generated_text: r.generated_text });
+      const r = await cmsFinishChapter(chapter.id);
+      onUpdated({ ...chapter, status: "done", generated_text: r.generated_text });
     } catch (e) { setError(String(e)); }
     finally { setWriting(false); }
   }
