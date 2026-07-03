@@ -13,9 +13,10 @@ interface Props {
 
 // ── Manuscript slide-in panel ──────────────────────────────────────────────────
 function ManuscriptPanel({
-  chapter, onClose, onChapterUpdated,
+  chapter, displayNumber, onClose, onChapterUpdated,
 }: {
   chapter: CmsChapter;
+  displayNumber: number;
   onClose: () => void;
   onChapterUpdated: (ch: CmsChapter) => void;
 }) {
@@ -28,10 +29,10 @@ function ManuscriptPanel({
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const heading = chapter.section_type !== "chapter"
-    ? (chapter.title ?? `Section ${chapter.number}`)
+    ? (chapter.title ?? `Section ${displayNumber}`)
     : chapter.title
-      ? `Chapter ${chapter.number}: ${chapter.title}`
-      : `Chapter ${chapter.number}`;
+      ? `Chapter ${displayNumber}: ${chapter.title}`
+      : `Chapter ${displayNumber}`;
 
   const paragraphs = (chapter.generated_text ?? "")
     .split(/\n\n+/)
@@ -58,7 +59,7 @@ function ManuscriptPanel({
   }
 
   async function handlePdf() {
-    try { await cmsDownloadPdf(chapter.id, chapter.number); }
+    try { await cmsDownloadPdf(chapter.id, displayNumber); }
     catch (e) { setSaveErr(String(e)); }
   }
 
@@ -264,6 +265,10 @@ function ChapterSegmentsPanel({
     .sort((a, b) => a.number - b.number)
     .map(c => c.id);
 
+  const displayNumber = chapter.section_type === "chapter"
+    ? (numberedIds.indexOf(chapter.id) + 1) || chapter.number
+    : chapter.number;
+
   function moveTargetLabel(t: CmsChapter): string {
     if (t.section_type !== "chapter") return t.title ?? "Section";
     if (t.title === "Prologue" || t.title === "Epilogue") return t.title;
@@ -308,10 +313,10 @@ function ChapterSegmentsPanel({
   }
 
   const heading = chapter.section_type !== "chapter"
-    ? (chapter.title ?? `Section ${chapter.number}`)
+    ? (chapter.title ?? `Section ${displayNumber}`)
     : chapter.title
-      ? `Chapter ${chapter.number}: ${chapter.title}`
-      : `Chapter ${chapter.number}`;
+      ? `Chapter ${displayNumber}: ${chapter.title}`
+      : `Chapter ${displayNumber}`;
 
   return (
     <div className="cms-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -578,13 +583,19 @@ export default function BookDashboard({ user, book }: Props) {
       )}
 
       {/* Manuscript panel */}
-      {viewMs && viewMs.generated_text && (
-        <ManuscriptPanel
-          chapter={viewMs}
-          onClose={() => setViewMs(null)}
-          onChapterUpdated={handleChapterUpdated}
-        />
-      )}
+      {viewMs && viewMs.generated_text && (() => {
+        const sorted = mainChapters.slice().sort((a, b) => a.number - b.number);
+        const idx    = sorted.findIndex(c => c.id === viewMs.id);
+        const displayNumber = idx >= 0 ? idx + 1 : viewMs.number;
+        return (
+          <ManuscriptPanel
+            chapter={viewMs}
+            displayNumber={displayNumber}
+            onClose={() => setViewMs(null)}
+            onChapterUpdated={handleChapterUpdated}
+          />
+        );
+      })()}
 
       {/* Segments panel */}
       {viewSegs && (

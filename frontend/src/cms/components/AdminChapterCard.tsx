@@ -71,7 +71,7 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
 
   async function handlePdf(e: React.MouseEvent) {
     e.stopPropagation();
-    try { await cmsDownloadPdf(chapter.id, chapter.number); }
+    try { await cmsDownloadPdf(chapter.id, index + 1); }
     catch (e) { setError(String(e)); }
   }
 
@@ -135,9 +135,9 @@ export default function AdminChapterCard({ chapter, segments, index, onUpdated, 
         {chapter.section_type !== "chapter" ? (
           <div className="adm-num" style={{ fontSize: 24 }}>{SECTION_ICONS[chapter.title ?? ""] ?? "📄"}</div>
         ) : (
-          <div className="adm-num">{String(chapter.number).padStart(2, "0")}</div>
+          <div className="adm-num">{String(index + 1).padStart(2, "0")}</div>
         )}
-        <div className="adm-title">{chapter.title || `Chapter ${chapter.number}`}</div>
+        <div className="adm-title">{chapter.title || `Chapter ${index + 1}`}</div>
         <div className="adm-segs">{segments.length} recording{segments.length !== 1 ? "s" : ""}</div>
 
         {chapter.status === "done" && chapter.generated_text && (
