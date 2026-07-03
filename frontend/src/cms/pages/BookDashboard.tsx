@@ -434,6 +434,14 @@ export default function BookDashboard({ user, book }: Props) {
   const mainChapters = chapters.filter((c) => c.section_type === "chapter");
   const backMatter   = chapters.filter((c) => c.section_type === "back_matter");
 
+  // 1-based display numbers for real chapters only (Prologue/Epilogue excluded)
+  const SPECIAL_CHAPTER_TITLES = new Set(["Prologue", "Epilogue"]);
+  const chapterDisplayNums = new Map<number, number>();
+  mainChapters
+    .filter((c) => !SPECIAL_CHAPTER_TITLES.has(c.title ?? ""))
+    .sort((a, b) => a.number - b.number)
+    .forEach((ch, i) => chapterDisplayNums.set(ch.id, i + 1));
+
   const doneCount = chapters.filter((c) => c.status === "done").length;
   const recordingWithSegs = chapters.filter(
     (c) => c.status === "recording" && (segsMap[c.id]?.length ?? 0) > 0
@@ -530,6 +538,7 @@ export default function BookDashboard({ user, book }: Props) {
                 {frontMatter.map((ch, i) => (
                   <div key={ch.id}>
                     <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
+                      displayNumber={chapterDisplayNums.get(ch.id) ?? 0}
                       onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
                     {(segsMap[ch.id]?.length ?? 0) > 0 && (
                       <button onClick={() => setViewSegs(ch)} className="cms-segs-link">
@@ -549,6 +558,7 @@ export default function BookDashboard({ user, book }: Props) {
                 {mainChapters.map((ch, i) => (
                   <div key={ch.id}>
                     <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
+                      displayNumber={chapterDisplayNums.get(ch.id) ?? 0}
                       onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
                     {(segsMap[ch.id]?.length ?? 0) > 0 && (
                       <button onClick={() => setViewSegs(ch)} className="cms-segs-link">
@@ -568,6 +578,7 @@ export default function BookDashboard({ user, book }: Props) {
                 {backMatter.map((ch, i) => (
                   <div key={ch.id}>
                     <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
+                      displayNumber={chapterDisplayNums.get(ch.id) ?? 0}
                       onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
                     {(segsMap[ch.id]?.length ?? 0) > 0 && (
                       <button onClick={() => setViewSegs(ch)} className="cms-segs-link">
@@ -583,19 +594,14 @@ export default function BookDashboard({ user, book }: Props) {
       )}
 
       {/* Manuscript panel */}
-      {viewMs && viewMs.generated_text && (() => {
-        const sorted = mainChapters.slice().sort((a, b) => a.number - b.number);
-        const idx    = sorted.findIndex(c => c.id === viewMs.id);
-        const displayNumber = idx >= 0 ? idx + 1 : viewMs.number;
-        return (
-          <ManuscriptPanel
-            chapter={viewMs}
-            displayNumber={displayNumber}
-            onClose={() => setViewMs(null)}
-            onChapterUpdated={handleChapterUpdated}
-          />
-        );
-      })()}
+      {viewMs && viewMs.generated_text && (
+        <ManuscriptPanel
+          chapter={viewMs}
+          displayNumber={chapterDisplayNums.get(viewMs.id) ?? viewMs.number}
+          onClose={() => setViewMs(null)}
+          onChapterUpdated={handleChapterUpdated}
+        />
+      )}
 
       {/* Segments panel */}
       {viewSegs && (
