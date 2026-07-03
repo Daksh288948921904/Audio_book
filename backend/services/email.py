@@ -1,18 +1,16 @@
+import base64
 import logging
 import os
-import smtplib
-from email import encoders
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from email.utils import parseaddr
+
+import requests
 
 log = logging.getLogger(__name__)
 
-BREVO_USER = os.getenv("BREVO_SMTP_USER", "")
-BREVO_KEY  = os.getenv("BREVO_SMTP_KEY", "")
-FROM_EMAIL = os.getenv("EMAIL_FROM", f"AudioBook Studio <{BREVO_USER}>")
-SITE_URL   = os.getenv("SITE_URL", "https://books.rig360media.com")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+BREVO_USER    = os.getenv("BREVO_SMTP_USER", "")
+FROM_EMAIL    = os.getenv("EMAIL_FROM", f"AudioBook Studio <{BREVO_USER}>")
+SITE_URL      = os.getenv("SITE_URL", "https://books.rig360media.com")
 
 
 def send_chapter_ready(
@@ -22,11 +20,20 @@ def send_chapter_ready(
     book_title: str,
     pdf_bytes: bytes,
 ) -> None:
-    if not BREVO_USER or not BREVO_KEY:
+    if not BREVO_API_KEY:
+        log.warning("BREVO_API_KEY not set — skipping email")
         return
 
     display_name = to_name or to_email.split("@")[0]
-    from_addr = FROM_EMAIL or f"AudioBook Studio <{BREVO_USER}>"
+
+    # Parse display name and address from EMAIL_FROM env var
+    from_display, from_addr = parseaddr(FROM_EMAIL)
+    if not from_addr:
+        from_addr = BREVO_USER
+    if not from_display:
+        from_display = "AudioBook Studio"
+
+    safe = "".join(c for c in chapter_title if c.isalnum() or c in " _-").strip() or "chapter"
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -38,7 +45,7 @@ def send_chapter_ready(
         <tr>
           <td style="background:linear-gradient(135deg,#4c1d95,#6d28d9,#8b5cf6);padding:36px 40px;">
             <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;">AudioBook Studio</p>
-            <h1 style="margin:8px 0 0;font-size:26px;font-weight:800;color:#fff;">📖 {book_title}</h1>
+            <h1 style="margin:8px 0 0;font-size:26px;font-weight:800;color:#fff;">&#128218; {book_title}</h1>
           </td>
         </tr>
 
@@ -56,7 +63,7 @@ def send_chapter_ready(
               </p>
             </div>
             <a href="{SITE_URL}" style="display:inline-block;padding:13px 28px;background:#7c3aed;color:#fff;border-radius:9px;text-decoration:none;font-size:14px;font-weight:700;letter-spacing:0.3px;">
-              Edit on {SITE_URL.replace('https://', '')} →
+              Edit on {SITE_URL.replace('https://', '')} &#8594;
             </a>
           </td>
         </tr>
@@ -76,29 +83,22 @@ def send_chapter_ready(
 </body>
 </html>"""
 
-    safe = "".join(c for c in chapter_title if c.isalnum() or c in " _-").strip() or "chapter"
+    payload = {
+        "sender": {"name": from_display, "email": from_addr},
+        "to": [{"email": to_email, "name": display_name}],
+        "subject": f'"{chapter_title}" is published — {book_title}',
+        "htmlContent": html,
+        "attachment": [{
+            "content": base64.b64encode(pdf_bytes).decode(),
+            "name": f"{safe}.pdf",
+        }],
+    }
 
-    msg = MIMEMultipart("mixed")
-    msg["From"]    = from_addr
-    msg["To"]      = to_email
-    msg["Subject"] = f'"{chapter_title}" is published — {book_title}'
-    msg.attach(MIMEText(html, "html", "utf-8"))
-
-    pdf_part = MIMEBase("application", "pdf")
-    pdf_part.set_payload(pdf_bytes)
-    encoders.encode_base64(pdf_part)
-    pdf_part.add_header("Content-Disposition", f'attachment; filename="{safe}.pdf"')
-    msg.attach(pdf_part)
-
-    # Use the actual From address as the envelope sender so Brevo validates
-    # it against your verified senders, not the technical SMTP login.
-    _, envelope_from = parseaddr(from_addr)
-    if not envelope_from:
-        envelope_from = BREVO_USER
-
-    with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=15) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.login(BREVO_USER, BREVO_KEY)
-        smtp.sendmail(envelope_from, to_email, msg.as_string())
-        log.info("Email sent to %s for chapter '%s'", to_email, chapter_title)
+    resp = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        json=payload,
+        headers={"api-key": BREVO_API_KEY},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    log.info("Email sent to %s for chapter '%s'", to_email, chapter_title)
