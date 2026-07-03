@@ -48,9 +48,8 @@ const POSSIBLE = [
 
 const STEPS = [
   { n: "01", title: "Speak freely", body: "No outline required. Just press record and tell your story the way you'd tell a friend — in whatever order it comes.", icon: "🎙" },
-  { n: "02", title: "Watch it become a chapter", body: "Your words are shaped into polished prose — preserving your voice, your rhythm, your way of seeing the world. Nothing gets invented. Everything is you.", icon: "✦" },
+  { n: "02", title: "Watch it become a chapter", body: "Your words are analysed by our team but they dont turn it into pros without preserving your voice, your rhythm, your way of seeing the world. Nothing gets invented. Everything is you.", icon: "✦" },
   { n: "03", title: "Shape it into a book", body: "Review, refine, reorder. Build chapter by chapter until the full arc of your life is there on the page — exactly as you lived it.", icon: "📚" },
-  { n: "04", title: "Share it — or keep it close", body: "Publish your audiobook, print it, or share it privately. Your story, your terms.", icon: "✉" },
 ];
 
 const STORIES = [
@@ -117,8 +116,7 @@ export default function LandingPage({ onLogin }: Props) {
           <p className="lp-hero-lead">
             You've carried your story long enough. The moments that shaped you, the lessons that cost you, the journey no one else has lived — they deserve more than memory. They deserve permanence.
           </p>
-          <p className="lp-hero-sub">
-            Inkwell turns the way you already talk — naturally, from the heart — into a memoir you're proud to leave behind.
+          <p className="lp-hero-sub">Inkell helps you to capture your voice from your heart and our team helps shape into a memoir we are proud of.
           </p>
           <div className="lp-hero-actions">
             <button className="lp-hero-cta" onClick={() => setShowSignIn(true)}>
@@ -222,7 +220,7 @@ export default function LandingPage({ onLogin }: Props) {
       <Reveal className="lp-section lp-section-mid">
         <div className="lp-inner lp-inner-wide">
           <p className="lp-eyebrow">How it works</p>
-          <h2 className="lp-h2">You talk. Your book takes shape.</h2>
+          <h2 className="lp-h2">You talk we capture the thought and help make it take shape</h2>
           <div className="lp-steps">
             {STEPS.map((s, i) => (
               <div key={i} className="lp-step" style={{ animationDelay: `${i * 100}ms` }}>
@@ -277,7 +275,7 @@ export default function LandingPage({ onLogin }: Props) {
           <div className="lp-final-icon">✍</div>
           <h2 className="lp-h2">Every story deserves to be told.</h2>
           <p className="lp-body lp-body-center">
-            Yours is no different. The only thing standing between you and your book is the first sentence — and you don't even have to write it.
+            Yours is no different. The only thing standing between you and your book is the first sentence.
           </p>
           <button className="lp-hero-cta" onClick={() => setShowSignIn(true)}>
             <span className="lp-cta-shimmer" />
