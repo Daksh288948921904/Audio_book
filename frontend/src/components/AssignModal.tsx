@@ -35,13 +35,6 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
     }
   }
 
-  const targetChapter = chapters.find((c) => c.id === uploading);
-  const uploadingLabel = targetChapter
-    ? targetChapter.section_type === "chapter"
-      ? `Chapter ${targetChapter.number}`
-      : (targetChapter.title ?? `Section ${targetChapter.number}`)
-    : "…";
-
   const frontMatter  = chapters.filter((c) => c.section_type === "front_matter");
   const mainChapters = chapters.filter((c) => c.section_type === "chapter");
   const backMatter   = chapters.filter((c) => c.section_type === "back_matter");
@@ -54,6 +47,13 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
       chapterDisplayNum[ch.id] = ++chapterCounter;
     }
   }
+
+  const targetChapter = chapters.find((c) => c.id === uploading);
+  const uploadingLabel = targetChapter
+    ? targetChapter.section_type === "chapter"
+      ? targetChapter.title || `Chapter ${chapterDisplayNum[targetChapter.id] ?? targetChapter.number}`
+      : (targetChapter.title ?? `Section ${targetChapter.number}`)
+    : "…";
 
   function renderGroup(group: Chapter[], label: string) {
     if (group.length === 0) return null;
@@ -81,7 +81,7 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
                     {SECTION_ICONS[ch.title ?? ""] ?? "📄"}
                   </div>
                 )}
-                <div className="assign-ch-name">{ch.title || `Chapter ${ch.number}`}</div>
+                <div className="assign-ch-name">{ch.title || (dispNum != null ? `Chapter ${dispNum}` : `Chapter ${ch.number}`)}</div>
                 <div className="assign-ch-s">
                   {locked ? (
                     <span style={{ color: ch.status === "done" ? "var(--green)" : "var(--amber)" }}>
