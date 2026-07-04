@@ -1,5 +1,18 @@
+import time
+
 from backend.config import GROQ_LLM_MODEL
 from backend.services.groq_pool import pool
+
+# Segments per LLM call. Each batch uses ~3 000–5 000 tokens (input + output),
+# well inside Groq's 12 000 TPM free-tier limit.
+_BATCH_SIZE = 5
+
+# Tokens to generate per batch. ~1 500 ≈ 1–2 pages of prose.
+_BATCH_OUTPUT_TOKENS = 1500
+
+# Seconds to wait between batches so successive calls don't exceed 12 000 TPM.
+# At ~4 000 tokens per call: 12 000 / 4 000 = 3 calls/min → 1 call every 20 s.
+_BATCH_DELAY = 20
 
 
 def _chat(prompt: str, max_tokens: int = 4096) -> str:
@@ -12,48 +25,88 @@ def _chat(prompt: str, max_tokens: int = 4096) -> str:
     return result.choices[0].message.content.strip()
 
 
+def _seg_block(segments: list[dict]) -> str:
+    return "\n\n".join(
+        f"[{seg.get('intent', 'informational').upper()}]: {seg['text']}"
+        for seg in segments
+    )
+
+
 def generate_chapter(chunks: list[dict], chapter_number: int) -> str:
     summaries = [c for c in chunks if c.get("type") == "summary"]
     segments  = [c for c in chunks if c.get("type") == "segment"]
 
+    # Previous-chapter context (kept short — summaries are already concise)
     context_block = ""
     if summaries:
         context_block = "PREVIOUS CHAPTERS CONTEXT:\n" + "\n\n".join(
             f"[Summary]: {s['text']}" for s in summaries
         ) + "\n\n"
 
-    segments_block = "AUTHOR'S RAW NOTES FOR THIS CHAPTER (in order):\n" + "\n\n".join(
-        f"[{seg.get('intent', 'informational').upper()}]: {seg['text']}" for seg in segments
-    )
+    # Split segments into batches
+    batches = [segments[i:i + _BATCH_SIZE] for i in range(0, len(segments), _BATCH_SIZE)]
 
-    # Scale output budget with content: ~1500 tokens per segment, capped at 32768
-    max_tokens = min(1500 * max(len(segments), 1), 32768)
+    parts: list[str] = []
+    prev_tail = ""  # last ~600 chars of previous section for continuity
 
-    prompt = f"""{context_block}{segments_block}
+    for idx, batch in enumerate(batches):
+        is_first = idx == 0
+        notes = _seg_block(batch)
+
+        if is_first:
+            prompt = f"""{context_block}AUTHOR'S RAW NOTES FOR THIS CHAPTER (in order):
+{notes}
 
 ---
-You are a professional book author. Using the author's raw notes above, write the prose for this chapter as polished, engaging prose.
+You are a professional book author writing the opening of this chapter as polished, engaging prose.
 
 Rules:
-- Cover EVERY note thoroughly — do not skip or compress any part of the material.
-- Each recording note should expand into at least one full paragraph of prose.
-- Follow the intent labels: write [FUNNY] sections with humor, [SERIOUS] with weight, [DRAMATIC] with tension, [EMOTIONAL] with feeling, [SUSPENSEFUL] with dread, [ROMANTIC] with warmth.
+- Cover EVERY note thoroughly — expand each into at least one full paragraph of prose.
+- Follow intent labels: [FUNNY] → humour, [SERIOUS] → weight, [DRAMATIC] → tension, [EMOTIONAL] → feeling, [SUSPENSEFUL] → dread, [ROMANTIC] → warmth.
 - Do NOT include the intent labels in the output.
-- Use the previous chapters context only to maintain continuity — do not repeat it.
-- Do NOT include a chapter heading or "Chapter N" in the output — start directly with the prose.
+- Do NOT add a chapter heading — start directly with prose.
+- Use previous chapters context only for continuity; do not repeat it.
 - Write in a literary fiction style unless the notes suggest otherwise.
-- Write as many pages as needed to fully honour all the author's notes.
+- Write until you have fully covered every note above.
 
 Begin writing:"""
+        else:
+            prompt = f"""STORY SO FAR — end of previous section (continue seamlessly from here):
+{prev_tail}
 
-    return _chat(prompt, max_tokens=max_tokens)
+AUTHOR'S RAW NOTES TO CONTINUE WITH (in order):
+{notes}
+
+---
+You are a professional book author continuing this chapter from exactly where the story left off.
+
+Rules:
+- Do NOT repeat, summarise, or reference what already happened — pick up mid-story.
+- Cover EVERY note thoroughly — expand each into at least one full paragraph.
+- Follow intent labels for tone.
+- Do NOT include intent labels in output.
+- Do NOT add any heading.
+- Maintain the same literary fiction style and narrative voice.
+- Write until you have fully covered every note above.
+
+Continue writing:"""
+
+        section = _chat(prompt, max_tokens=_BATCH_OUTPUT_TOKENS)
+        parts.append(section)
+        prev_tail = section[-600:]  # last ~150 words feeds next batch
+
+        # Throttle between batches to stay inside Groq's TPM limit
+        if idx < len(batches) - 1:
+            time.sleep(_BATCH_DELAY)
+
+    return "\n\n".join(parts)
 
 
 def summarize_chapter(chapter_text: str, chapter_number: int) -> str:
-    prompt = f"""Summarize Chapter {chapter_number} of a book in 3-5 sentences. Capture key events, character developments, and tone. This summary will be used as context for writing the next chapter.
+    prompt = f"""Summarize this book chapter in 3-5 sentences. Capture key events, character developments, and tone. This summary will be used as context for writing the next chapter.
 
-Chapter {chapter_number}:
-{chapter_text}
+Chapter text:
+{chapter_text[:3000]}
 
 Summary:"""
     return _chat(prompt, max_tokens=300)
