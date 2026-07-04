@@ -143,7 +143,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
 
         {chapter.status === "done" && chapter.generated_text && (
           <div className="adm-excerpt">
-            {chapter.generated_text.replace(/\n+/g, " ").slice(0, 90)}…
+            {chapter.generated_text.replace(/^Chapter\s+\d+[^\n]*\n+/i, "").replace(/\n+/g, " ").slice(0, 90)}…
           </div>
         )}
 

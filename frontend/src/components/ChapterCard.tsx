@@ -202,7 +202,7 @@ export default function ChapterCard({
 
         {chapter.status === "done" && chapter.generated_text && (
           <div className="cc-card-excerpt">
-            {chapter.generated_text.replace(/\n+/g, " ").slice(0, 110)}…
+            {chapter.generated_text.replace(/^Chapter\s+\d+[^\n]*\n+/i, "").replace(/\n+/g, " ").slice(0, 110)}…
           </div>
         )}
 
@@ -275,7 +275,7 @@ export default function ChapterCard({
 
               {chapter.status === "done" && chapter.generated_text && !isGenerating && (
                 <div className="cc-excerpt">
-                  {chapter.generated_text.replace(/\n+/g, " ").slice(0, 400)}…
+                  {chapter.generated_text.replace(/^Chapter\s+\d+[^\n]*\n+/i, "").replace(/\n+/g, " ").slice(0, 400)}…
                 </div>
               )}
 

@@ -32,7 +32,7 @@ def generate_chapter(chunks: list[dict], chapter_number: int) -> str:
     prompt = f"""{context_block}{segments_block}
 
 ---
-You are a professional book author. Using the author's raw notes above, write Chapter {chapter_number} of the book as polished, engaging prose.
+You are a professional book author. Using the author's raw notes above, write the prose for this chapter as polished, engaging prose.
 
 Rules:
 - Cover EVERY note thoroughly — do not skip or compress any part of the material.
@@ -40,11 +40,11 @@ Rules:
 - Follow the intent labels: write [FUNNY] sections with humor, [SERIOUS] with weight, [DRAMATIC] with tension, [EMOTIONAL] with feeling, [SUSPENSEFUL] with dread, [ROMANTIC] with warmth.
 - Do NOT include the intent labels in the output.
 - Use the previous chapters context only to maintain continuity — do not repeat it.
-- Start with "Chapter {chapter_number}" as the heading.
+- Do NOT include a chapter heading or "Chapter N" in the output — start directly with the prose.
 - Write in a literary fiction style unless the notes suggest otherwise.
 - Write as many pages as needed to fully honour all the author's notes.
 
-Chapter {chapter_number}:"""
+Begin writing:"""
 
     return _chat(prompt, max_tokens=max_tokens)
 

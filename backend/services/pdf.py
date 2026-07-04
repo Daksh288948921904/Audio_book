@@ -1,5 +1,9 @@
+import re
 import unicodedata
 from fpdf import FPDF
+
+# Matches a leading "Chapter N" or "Chapter N: Title" line the LLM used to emit
+_CHAPTER_HEADING_RE = re.compile(r"^Chapter\s+\d+[^\n]*\n+", re.IGNORECASE)
 
 
 def _sanitize(text: str) -> str:
@@ -45,13 +49,16 @@ def generate_pdf(chapter_number: int, title: str | None, text: str, display_numb
     pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + pdf.epw, pdf.get_y())
     pdf.ln(10)
 
+    # Strip any "Chapter N" heading the LLM embedded in the text body (old generations)
+    body = _CHAPTER_HEADING_RE.sub("", text, count=1).lstrip()
+
     # Body
     pdf.set_font("Helvetica", size=12)
-    for paragraph in text.split("\n\n"):
+    for paragraph in body.split("\n\n"):
         paragraph = _sanitize(paragraph.strip())
         if not paragraph:
             continue
-        pdf.multi_cell(0, 7, paragraph)
+        pdf.multi_cell(0, 7, paragraph)  # type: ignore[arg-type]
         pdf.ln(5)
 
     return bytes(pdf.output())
