@@ -9,6 +9,7 @@ import RecordZone from "./components/RecordZone";
 import AssignModal from "./components/AssignModal";
 import ChapterCard from "./components/ChapterCard";
 import ChapterViewer from "./components/ChapterViewer";
+import WelcomeScreen from "./components/WelcomeScreen";
 
 interface PendingRec { blob: Blob; filename: string; }
 interface AuthUser { email: string; name: string; }
@@ -27,6 +28,7 @@ export default function App() {
   const [showNewBook, setShowNewBook] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   // ── Restore session from localStorage on mount ──────────────────────────
   useEffect(() => {
@@ -75,6 +77,7 @@ export default function App() {
 
   function handleLogin(user: AuthUser) {
     setAuthUser(user);
+    setShowWelcome(true);
   }
 
   function handleSignOut() {
@@ -445,6 +448,15 @@ export default function App() {
         <NewBookModal
           onCreated={handleBookCreated}
           onClose={() => setShowNewBook(false)}
+        />
+      )}
+
+      {/* ── Welcome Screen — fresh login only ── */}
+      {showWelcome && (
+        <WelcomeScreen
+          name={authUser.name}
+          hasBooks={books.length > 0}
+          onDone={() => setShowWelcome(false)}
         />
       )}
     </div>
