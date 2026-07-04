@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { cmsFinishChapter, cmsDownloadPdf, type CmsChapter, type CmsSegment } from "../api/adminClient";
+import { cmsFinishChapter, cmsDownloadPdf, cmsSendChapterEmail, type CmsChapter, type CmsSegment } from "../api/adminClient";
 
 const SECTION_ICONS: Record<string, string> = {
   "Dedication": "💌", "Epigraph": "💬", "Foreword": "✍", "Preface": "📝",
@@ -28,8 +28,10 @@ interface Props {
 }
 
 export default function AdminChapterCard({ chapter, segments, index, displayNumber, onUpdated, onViewManuscript }: Props) {
-  const [writing, setWriting] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [writing, setWriting]     = useState(false);
+  const [emailing, setEmailing]   = useState(false);
+  const [emailSent, setEmailSent] = useState<string | null>(null);
+  const [error, setError]         = useState<string | null>(null);
 
   // TTS state — browser Web Speech API
   const [voices, setVoices]       = useState<SpeechSynthesisVoice[]>([]);
@@ -74,6 +76,17 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     e.stopPropagation();
     try { await cmsDownloadPdf(chapter.id, displayNumber); }
     catch (e) { setError(String(e)); }
+  }
+
+  async function handleSendEmail() {
+    setEmailing(true);
+    setEmailSent(null);
+    setError(null);
+    try {
+      const r = await cmsSendChapterEmail(chapter.id);
+      setEmailSent(r.to);
+    } catch (e) { setError(String(e)); }
+    finally { setEmailing(false); }
   }
 
   function startTts() {
@@ -182,6 +195,19 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
               <button className="adm-btn adm-btn-pdf" onClick={handlePdf}>
                 ↓ PDF
               </button>
+              <button
+                className="adm-btn adm-btn-write"
+                onClick={handleSendEmail}
+                disabled={emailing}
+                style={{ background: "#0e7490" }}
+              >
+                {emailing ? "Sending…" : "✉ Send to Author"}
+              </button>
+              {emailSent && (
+                <div style={{ fontSize: 11, color: "#34d399", marginTop: 4 }}>
+                  ✓ Sent to {emailSent}
+                </div>
+              )}
 
               {/* TTS — browser Web Speech API */}
               <div className="adm-tts">

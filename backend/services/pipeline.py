@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
-from backend.db import Chapter, AudioSegment, Book, User
+from backend.db import Chapter, AudioSegment
 
 _SPECIAL_TITLES = {"Prologue", "Epilogue"}
 _active_generations: set[int] = set()
@@ -28,7 +28,6 @@ def _display_number(chapter: Chapter, db: Session) -> int | None:
 from backend.services import transcription, intent, vector_store, llm
 from backend.services.audio_preprocess import preprocess_audio
 from backend.services.pdf import generate_pdf
-from backend.services import email as email_svc
 
 
 def process_audio_segment(db: Session, chapter_id: int, audio_path: str, order_index: int) -> AudioSegment:
@@ -177,27 +176,5 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
 
     disp_num = _display_number(chapter, db)
     pdf_bytes = generate_pdf(chapter.number, chapter.title, generated_text, display_number=disp_num)
-
-    # Email the owner in a background thread — never blocks chapter generation
-    try:
-        book = db.query(Book).filter(Book.id == chapter.book_id).first()
-        if book:
-            user = db.query(User).filter(User.google_id == book.user_id).first()
-            if user:
-                kwargs = dict(
-                    to_email=user.email,
-                    to_name=user.name,
-                    chapter_title=chapter.title or f"Chapter {chapter.number}",
-                    book_title=book.title,
-                    pdf_bytes=pdf_bytes,
-                )
-                def _send(**kw):
-                    try:
-                        email_svc.send_chapter_ready(**kw)
-                    except Exception as exc:
-                        log.error("Auto-email failed for chapter %s: %s", chapter.id, exc)
-                threading.Thread(target=_send, kwargs=kwargs, daemon=True).start()
-    except Exception as exc:
-        log.error("Failed to dispatch email thread for chapter %s: %s", chapter.id, exc)
 
     return generated_text, pdf_bytes
