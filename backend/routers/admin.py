@@ -286,7 +286,7 @@ def send_chapter_email(chapter_id: int, db: Session = Depends(get_db), _: dict =
         email_svc.send_chapter_ready(
             to_email=user.email,
             to_name=user.name,
-            chapter_title=chapter.title or f"Chapter {chapter.number}",
+            chapter_title=chapter.title or (f"Chapter {disp_num}" if disp_num else f"Chapter {chapter.number}"),
             book_title=book.title,
             pdf_bytes=pdf_bytes,
         )
