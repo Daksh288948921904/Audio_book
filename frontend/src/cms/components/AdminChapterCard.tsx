@@ -152,7 +152,10 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
           <div className="adm-num">{String(displayNumber).padStart(2, "0")}</div>
         )}
         <div className="adm-title">{chapter.title || `Chapter ${displayNumber}`}</div>
-        <div className="adm-segs">{segments.length} recording{segments.length !== 1 ? "s" : ""}</div>
+        <div className="adm-segs">
+          {chapter.from_manuscript && "📄 From manuscript · "}
+          {segments.length} recording{segments.length !== 1 ? "s" : ""}
+        </div>
 
         {chapter.status === "done" && chapter.generated_text && (
           <div className="adm-excerpt">
@@ -182,7 +185,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
 
       {!isActivelyWriting && (
         <div className="adm-actions">
-          {(chapter.status === "recording" || isStuck) && segments.length > 0 && (
+          {(chapter.status === "recording" || isStuck) && (segments.length > 0 || chapter.from_manuscript) && (
             <button className="adm-btn adm-btn-write" onClick={handleWrite} disabled={writing}>
               {isStuck ? "↺ Retry Write" : chapter.section_type === "chapter" ? "✦ Write Chapter" : "✦ Write Section"}
             </button>

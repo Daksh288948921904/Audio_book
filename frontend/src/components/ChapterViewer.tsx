@@ -9,6 +9,7 @@ interface Props {
   summary: string;
   onReopen: () => void;
   onClose?: () => void;
+  fromManuscript?: boolean;
 }
 
 // ── Clean text for TTS ────────────────────────────────────────────────────────
@@ -131,7 +132,7 @@ function VoicePlayer({ text }: { text: string }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function ChapterViewer({
-  chapterId, chapterNumber, title, text: initialText, summary, onReopen, onClose,
+  chapterId, chapterNumber, title, text: initialText, summary, onReopen, onClose, fromManuscript,
 }: Props) {
   const [editing,     setEditing]     = useState(false);
   const [text,        setText]        = useState(initialText);
@@ -203,7 +204,7 @@ export default function ChapterViewer({
             </>
           ) : (
             <>
-              <button className="btn-reopen" onClick={onReopen}>← Re-record</button>
+              <button className="btn-reopen" onClick={onReopen}>{fromManuscript ? "🎙 Add Audio" : "← Re-record"}</button>
               <button className="btn-edit" onClick={startEdit}>✏ Edit</button>
               <button className="btn-pdf" onClick={downloadPdf}>↓ PDF</button>
               <button

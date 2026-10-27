@@ -64,7 +64,8 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
     return {
         "id": chapter.id, "number": chapter.number, "title": chapter.title,
         "status": chapter.status, "generated_text": chapter.generated_text,
-        "summary": chapter.summary, "created_at": chapter.created_at,
+        "summary": chapter.summary, "from_manuscript": chapter.base_text is not None,
+        "created_at": chapter.created_at,
         "finished_at": chapter.finished_at,
     }
 
@@ -113,6 +114,8 @@ def update_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db)
     if chapter.status != "done":
         raise HTTPException(status_code=400, detail="Chapter not yet generated")
     chapter.generated_text = body.text
+    if chapter.base_text is not None and not chapter.segments:
+        chapter.base_text = body.text  # keep edits when audio is added later
     db.commit()
     return {"status": "updated"}
 

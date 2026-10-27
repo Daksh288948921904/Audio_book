@@ -33,6 +33,14 @@ class Book(Base):
     user_id    = Column(String, nullable=True, index=True)  # Google sub
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # Author-uploaded manuscript PDF (extracted text only — the PDF itself isn't kept)
+    manuscript_filename    = Column(String, nullable=True)
+    manuscript_text        = Column(Text, nullable=True)
+    manuscript_pages       = Column(Integer, nullable=True)
+    manuscript_status      = Column(String, nullable=True)  # uploaded | processing | done | error
+    manuscript_progress    = Column(String, nullable=True)  # human-readable progress / error message
+    manuscript_uploaded_at = Column(DateTime, nullable=True)
+
     chapters = relationship("Chapter", back_populates="book", cascade="all, delete-orphan")
 
 
@@ -45,6 +53,7 @@ class Chapter(Base):
     title          = Column(String, nullable=True)
     section_type   = Column(String, default="chapter")  # "front_matter" | "chapter" | "back_matter"
     generated_text = Column(Text, nullable=True)
+    base_text      = Column(Text, nullable=True)  # enhanced manuscript text; audio prose is appended after it
     summary        = Column(Text, nullable=True)
     status         = Column(String, default="recording")  # recording | generating | done
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -69,6 +78,16 @@ class AudioSegment(Base):
     chapter = relationship("Chapter", back_populates="segments")
 
 
+_MANUSCRIPT_COLS = [
+    ("manuscript_filename", "VARCHAR"),
+    ("manuscript_text", "TEXT"),
+    ("manuscript_pages", "INTEGER"),
+    ("manuscript_status", "VARCHAR"),
+    ("manuscript_progress", "VARCHAR"),
+    ("manuscript_uploaded_at", "TIMESTAMP"),
+]
+
+
 def _sqlite_migrate():
     """SQLite-only incremental migrations (not needed for fresh PostgreSQL)."""
     with engine.connect() as conn:
@@ -79,10 +98,17 @@ def _sqlite_migrate():
         if "genre" not in book_cols:
             conn.execute(text("ALTER TABLE books ADD COLUMN genre VARCHAR DEFAULT 'fiction'"))
             conn.commit()
+        for col, typ in _MANUSCRIPT_COLS:
+            if col not in book_cols:
+                conn.execute(text(f"ALTER TABLE books ADD COLUMN {col} {typ}"))
+                conn.commit()
 
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(chapters)")).fetchall()]
         if "section_type" not in cols:
             conn.execute(text("ALTER TABLE chapters ADD COLUMN section_type VARCHAR DEFAULT 'chapter'"))
+            conn.commit()
+        if "base_text" not in cols:
+            conn.execute(text("ALTER TABLE chapters ADD COLUMN base_text TEXT"))
             conn.commit()
         if "book_id" not in cols:
             conn.execute(text(
@@ -105,13 +131,16 @@ def _sqlite_migrate():
             conn.execute(text("""
                 CREATE TABLE _chapters_tmp (
                     id INTEGER NOT NULL PRIMARY KEY, book_id INTEGER, number INTEGER NOT NULL,
-                    title VARCHAR, generated_text TEXT, summary TEXT, status VARCHAR,
+                    title VARCHAR, section_type VARCHAR DEFAULT 'chapter', generated_text TEXT,
+                    base_text TEXT, summary TEXT, status VARCHAR,
                     created_at DATETIME, finished_at DATETIME)
             """))
             conn.execute(text("""
                 INSERT INTO _chapters_tmp
-                SELECT id, book_id, number, title, generated_text,
-                       summary, status, created_at, finished_at FROM chapters
+                    (id, book_id, number, title, section_type, generated_text,
+                     base_text, summary, status, created_at, finished_at)
+                SELECT id, book_id, number, title, section_type, generated_text,
+                       base_text, summary, status, created_at, finished_at FROM chapters
             """))
             conn.execute(text("DROP TABLE chapters"))
             conn.execute(text("ALTER TABLE _chapters_tmp RENAME TO chapters"))
@@ -144,6 +173,11 @@ def _postgres_migrate():
         conn.execute(text(
             "ALTER TABLE chapters ADD COLUMN IF NOT EXISTS section_type VARCHAR DEFAULT 'chapter'"
         ))
+        conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS base_text TEXT"))
+        for col, typ in _MANUSCRIPT_COLS:
+            if typ == "TIMESTAMP":
+                typ = "TIMESTAMP WITH TIME ZONE"
+            conn.execute(text(f"ALTER TABLE books ADD COLUMN IF NOT EXISTS {col} {typ}"))
         conn.commit()
 
 

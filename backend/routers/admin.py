@@ -11,7 +11,8 @@ from backend.db import get_db, User, Book, Chapter, AudioSegment
 from backend.auth import require_admin
 from backend.services.pipeline import finish_chapter, _display_number
 from backend.services.pdf import generate_pdf
-from backend.services import storage
+from backend.services import storage, manuscript
+from backend.routers.books import manuscript_info
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -146,9 +147,59 @@ def list_user_books(google_id: str, db: Session = Depends(get_db), _: dict = _ad
             "created_at":    b.created_at,
             "chapter_count": len(b.chapters),
             "done_count":    sum(1 for c in b.chapters if c.status == "done"),
+            **manuscript_info(b),
         }
         for b in books
     ]
+
+
+def _manuscript_detail(book: Book) -> dict:
+    text = book.manuscript_text or ""
+    parts = manuscript.split_chapters(text) if text else []
+    return {
+        **manuscript_info(book),
+        "manuscript_pages":       book.manuscript_pages,
+        "manuscript_uploaded_at": book.manuscript_uploaded_at,
+        "word_count":             len(text.split()),
+        "running":                manuscript.is_running(book.id),
+        "preview":                text[:4000],
+        "detected_chapters": [
+            {"title": p["title"], "word_count": len(p["text"].split())} for p in parts
+        ],
+    }
+
+
+@router.get("/books/{book_id}/manuscript")
+def get_manuscript(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return _manuscript_detail(book)
+
+
+@router.post("/books/{book_id}/manuscript/create-chapters")
+def create_chapters_from_manuscript(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
+    """Split the uploaded manuscript into chapters and enhance each one, in the background."""
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if not book.manuscript_text:
+        raise HTTPException(status_code=400, detail="This book has no uploaded manuscript")
+    if book.manuscript_status == "done":
+        raise HTTPException(status_code=400, detail="Chapters were already created from this manuscript")
+    # "processing" without a live job means the server restarted mid-run — resume it.
+    # Claim the slot before touching the DB so a concurrent request can't clobber a live job's progress.
+    if not manuscript.reserve(book_id):
+        raise HTTPException(status_code=409, detail="Chapters are already being created")
+    try:
+        book.manuscript_status = "processing"
+        book.manuscript_progress = "Starting…"
+        db.commit()
+    except Exception:
+        manuscript.release(book_id)
+        raise
+    manuscript.launch(book_id)
+    return _manuscript_detail(book)
 
 
 @router.get("/books/{book_id}/chapters")
@@ -172,6 +223,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "status":        c.status,
             "generated_text": c.generated_text,
             "summary":       c.summary,
+            "from_manuscript": c.base_text is not None,
             "segment_count": db.query(AudioSegment).filter(AudioSegment.chapter_id == c.id).count(),
             "created_at":    c.created_at,
             "finished_at":   c.finished_at,
@@ -303,6 +355,8 @@ def update_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db)
     if chapter.status != "done":
         raise HTTPException(status_code=400, detail="Chapter not yet generated")
     chapter.generated_text = body.text
+    if chapter.base_text is not None and not chapter.segments:
+        chapter.base_text = body.text  # keep edits when audio is added later
     db.commit()
     return {"status": "updated"}
 

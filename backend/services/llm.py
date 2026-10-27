@@ -32,7 +32,9 @@ def _seg_block(segments: list[dict]) -> str:
     )
 
 
-def generate_chapter(chunks: list[dict], chapter_number: int) -> str:
+def generate_chapter(chunks: list[dict], chapter_number: int, lead_in: str = "") -> str:
+    """lead_in: existing chapter text (e.g. from an uploaded manuscript) that the
+    generated prose must continue from rather than open fresh."""
     summaries = [c for c in chunks if c.get("type") == "summary"]
     segments  = [c for c in chunks if c.get("type") == "segment"]
 
@@ -47,10 +49,10 @@ def generate_chapter(chunks: list[dict], chapter_number: int) -> str:
     batches = [segments[i:i + _BATCH_SIZE] for i in range(0, len(segments), _BATCH_SIZE)]
 
     parts: list[str] = []
-    prev_tail = ""  # last ~600 chars of previous section for continuity
+    prev_tail = lead_in[-600:]  # last ~600 chars of previous section for continuity
 
     for idx, batch in enumerate(batches):
-        is_first = idx == 0
+        is_first = idx == 0 and not lead_in
         notes = _seg_block(batch)
 
         if is_first:
@@ -110,3 +112,32 @@ Chapter text:
 
 Summary:"""
     return _chat(prompt, max_tokens=300)
+
+
+def enhance_passage(passage: str, prev_tail: str = "", genre: str = "fiction") -> str:
+    """Polish one passage of an author's own manuscript without changing its content."""
+    voice = (
+        "This is a memoir: keep the first-person voice and every factual detail exactly as told."
+        if genre == "memoir" else
+        "This is fiction: keep the plot, characters, names and point of view exactly as written."
+    )
+    continuity = (
+        f"END OF THE PREVIOUS POLISHED PASSAGE (for continuity only — do not repeat it):\n{prev_tail}\n\n"
+        if prev_tail else ""
+    )
+    prompt = f"""{continuity}AUTHOR'S ORIGINAL PASSAGE (extracted from their PDF — line breaks may be broken):
+{passage}
+
+---
+You are a professional book editor polishing this passage of the author's manuscript.
+
+Rules:
+- Improve grammar, rhythm, word choice, flow and vividness while preserving the author's voice.
+- {voice}
+- Do NOT add new events or remove existing ones. Keep all dialogue meaning intact.
+- Fix broken line wraps, stray page numbers, running headers and hyphenation left over from the PDF.
+- Separate paragraphs with a blank line.
+- Do NOT add headings, notes, or commentary — return only the polished passage.
+
+Polished passage:"""
+    return _chat(prompt, max_tokens=_BATCH_OUTPUT_TOKENS + 500)
