@@ -10,6 +10,7 @@ import AssignModal from "./components/AssignModal";
 import ChapterCard from "./components/ChapterCard";
 import ChapterViewer from "./components/ChapterViewer";
 import WelcomeScreen from "./components/WelcomeScreen";
+import ManuscriptButton from "./components/ManuscriptButton";
 
 interface PendingRec { blob: Blob; filename: string; }
 interface AuthUser { email: string; name: string; }
@@ -54,6 +55,22 @@ export default function App() {
     if (activeBookId == null) { setChapters([]); setSegsMap({}); return; }
     loadBookChapters(activeBookId);
   }, [activeBookId]);
+
+  // While the CMS turns an uploaded manuscript into chapters, poll for progress
+  // and show the new chapters once it finishes.
+  const activeManuscriptStatus = books.find((b) => b.id === activeBookId)?.manuscript_status;
+  useEffect(() => {
+    if (activeManuscriptStatus !== "processing" || activeBookId == null) return;
+    const bookId = activeBookId;
+    const t = setInterval(async () => {
+      try {
+        const bs = await listBooks();
+        setBooks(bs);
+        if (bs.find((b) => b.id === bookId)?.manuscript_status !== "processing") loadBookChapters(bookId);
+      } catch { /* transient — retry next tick */ }
+    }, 10_000);
+    return () => clearInterval(t);
+  }, [activeManuscriptStatus, activeBookId]);
 
   async function loadBooks() {
     try {
@@ -325,6 +342,10 @@ export default function App() {
               <div className="book-header-left">
                 <div className="book-header-eyebrow">Current Book</div>
                 <div className="book-header-title">{activeBook.title}</div>
+                <ManuscriptButton
+                  book={activeBook}
+                  onUploaded={(patch) => setBooks((prev) => prev.map((b) => b.id === activeBook.id ? { ...b, ...patch } : b))}
+                />
               </div>
               <div className="book-header-stats">
                 <div className="stat-pill">
@@ -431,6 +452,7 @@ export default function App() {
               title={viewingChapter.title ?? null}
               text={viewingChapter.generated_text}
               summary={viewingChapter.summary ?? ""}
+              fromManuscript={viewingChapter.from_manuscript}
               onClose={() => setViewingChapter(null)}
               onReopen={async () => {
                 const { reopenChapter } = await import("./api/client");

@@ -132,8 +132,14 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
     # Sort live segments by segment_id to preserve recording order
     chunks.sort(key=lambda c: (c.get("type") != "summary", c.get("segment_id") or 0))
 
-    # Generate chapter text
-    generated_text = llm.generate_chapter(chunks, chapter.number)
+    # Generate chapter text. Manuscript chapters keep their uploaded text and
+    # the recorded material is written as a continuation of it.
+    if chapter.base_text:
+        has_segments = any(c.get("type") == "segment" for c in chunks)
+        new_prose = llm.generate_chapter(chunks, chapter.number, lead_in=chapter.base_text) if has_segments else ""
+        generated_text = "\n\n".join(t for t in (chapter.base_text, new_prose) if t)
+    else:
+        generated_text = llm.generate_chapter(chunks, chapter.number)
 
     # Summarize
     summary = llm.summarize_chapter(generated_text, chapter.number)

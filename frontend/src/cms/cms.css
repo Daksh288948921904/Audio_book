@@ -347,6 +347,39 @@ html, body { background: var(--bg); color: var(--text-1); font-family: -apple-sy
 }
 .adm-select:focus { outline: none; border-color: rgba(139,92,246,0.5); }
 
+/* ── Uploaded manuscript ─────────────────────────────────────────────────────── */
+.cms-manuscript {
+  background: var(--surface); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px;
+  padding: 18px 20px; margin-bottom: 24px; display: flex; flex-direction: column; gap: 12px;
+}
+.cms-manuscript-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.cms-manuscript-eyebrow {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+  color: #a78bfa; margin-bottom: 4px;
+}
+.cms-manuscript-file { font-size: 15px; font-weight: 700; color: var(--text-1); word-break: break-all; }
+.cms-manuscript-meta { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.cms-manuscript-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.cms-manuscript-progress { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--amber); }
+.cms-manuscript-note { font-size: 13px; color: var(--text-2); line-height: 1.55; }
+.cms-manuscript-chapters {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px;
+  max-height: 220px; overflow-y: auto;
+}
+.cms-manuscript-ch {
+  display: flex; align-items: center; gap: 10px; font-size: 12px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+}
+.cms-manuscript-ch .n { color: var(--text-3); font-weight: 700; width: 18px; flex-shrink: 0; }
+.cms-manuscript-ch .t { color: var(--text-1); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cms-manuscript-ch .w { color: var(--text-3); flex-shrink: 0; }
+.cms-manuscript-preview {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; max-height: 320px; overflow-y: auto; margin: 0;
+  font-family: Georgia, serif; font-size: 13px; line-height: 1.65; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+
 /* ── Compile results ──────────────────────────────────────────────────────────── */
 .cms-compile-results {
   background: var(--surface); border: 1px solid var(--border2); border-radius: 12px;

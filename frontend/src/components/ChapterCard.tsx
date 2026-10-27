@@ -333,6 +333,13 @@ export default function ChapterCard({
                 </div>
               )}
 
+              {!isGenerating && chapter.status === "recording" && chapter.from_manuscript && (
+                <div className="cc-empty-segs">
+                  📄 This chapter comes from your manuscript. Your text is kept — new recordings
+                  are written up and added to the end of it.
+                </div>
+              )}
+
               {!isGenerating && segments.length === 0 && chapter.status === "recording" && (
                 <div className="cc-empty-segs">
                   No recordings yet — record above and assign this chapter.
@@ -345,7 +352,9 @@ export default function ChapterCard({
                     <>
                       <button className="cc-view" onClick={openAndView}>View Manuscript</button>
                       <button className="cc-pdf" onClick={downloadPdf}>↓ PDF</button>
-                      <button className="cc-reopen" onClick={handleReopen}>← Re-record</button>
+                      <button className="cc-reopen" onClick={handleReopen}>
+                        {chapter.from_manuscript ? "🎙 Add Audio" : "← Re-record"}
+                      </button>
                     </>
                   )}
                   {chapter.status === "recording" && chapter.section_type === "chapter" && (

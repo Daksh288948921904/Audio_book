@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   cmsListChapters, cmsGetSegments, cmsCompileBook, cmsUpdateChapterText, cmsDownloadPdf,
   cmsFetchAudioBlob, cmsReorderSegments, cmsMoveSegment, cmsSendChapterEmail,
-  type CmsChapter, type CmsBook, type CmsUser, type CmsSegment, type CompileResult,
+  cmsGetManuscript, cmsCreateChaptersFromManuscript,
+  type CmsChapter, type CmsBook, type CmsUser, type CmsSegment, type CompileResult, type CmsManuscript,
 } from "../api/adminClient";
 import AdminChapterCard from "../components/AdminChapterCard";
 
@@ -385,6 +386,98 @@ function ChapterSegmentsPanel({
   );
 }
 
+// ── Uploaded manuscript PDF ────────────────────────────────────────────────────
+function ManuscriptSection({
+  ms, starting, onCreate,
+}: {
+  ms: CmsManuscript;
+  starting: boolean;
+  onCreate: () => void;
+}) {
+  const [showPreview, setShowPreview] = useState(false);
+  const status = ms.manuscript_status;
+  // "processing" with no live job = server restarted mid-run; creating again resumes it.
+  const busy = ms.running || starting;
+  const canCreate = !busy && status !== "done";
+  const totalWords = ms.detected_chapters.reduce((a, c) => a + c.word_count, 0);
+  // ~5 000 chars per LLM call with a 20 s throttle between calls
+  const estMinutes = Math.max(1, Math.round((totalWords * 6) / 5000 / 3));
+
+  return (
+    <div className="cms-manuscript">
+      <div className="cms-manuscript-head">
+        <div>
+          <div className="cms-manuscript-eyebrow">📄 Author's Manuscript</div>
+          <div className="cms-manuscript-file">{ms.manuscript_filename}</div>
+          <div className="cms-manuscript-meta">
+            {ms.manuscript_pages} pages · {ms.word_count.toLocaleString()} words
+            {ms.manuscript_uploaded_at && <> · uploaded {new Date(ms.manuscript_uploaded_at).toLocaleString()}</>}
+          </div>
+        </div>
+        <div className="cms-manuscript-actions">
+          <button className="cms-btn cms-btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowPreview((v) => !v)}>
+            {showPreview ? "Hide text" : "Preview text"}
+          </button>
+          {status !== "done" && (
+            <button className="cms-btn cms-btn-primary" onClick={onCreate} disabled={!canCreate}>
+              {busy
+                ? <><div className="cms-spinner" style={{ width: 12, height: 12 }} /> Creating…</>
+                : status === "processing" || status === "error"
+                  ? "↺ Resume Creating Chapters"
+                  : `✦ Create ${ms.detected_chapters.length} Chapters`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {busy && ms.manuscript_progress && (
+        <div className="cms-manuscript-progress">
+          <div className="cms-spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />
+          {ms.manuscript_progress}
+        </div>
+      )}
+      {!busy && status === "error" && (
+        <div className="cms-error-bar" style={{ marginBottom: 0 }}>{ms.manuscript_progress}</div>
+      )}
+      {!busy && status === "processing" && (
+        <div className="cms-manuscript-note" style={{ color: "#fb923c" }}>
+          Interrupted ({ms.manuscript_progress}). Resume to continue — chapters already created are kept.
+        </div>
+      )}
+      {status === "done" && (
+        <div className="cms-manuscript-note" style={{ color: "var(--green)" }}>
+          ✓ {ms.manuscript_progress}. The author can add audio to any of them.
+        </div>
+      )}
+      {status === "uploaded" && (
+        <div className="cms-manuscript-note">
+          Each chapter is polished by the AI (grammar, flow, PDF clean-up — plot and voice kept) and added
+          to the book as a finished chapter. Empty placeholder chapters are replaced.
+          Takes roughly {estMinutes} min.
+        </div>
+      )}
+
+      {status !== "done" && ms.detected_chapters.length > 0 && (
+        <div className="cms-manuscript-chapters">
+          {ms.detected_chapters.map((c, i) => (
+            <div key={i} className="cms-manuscript-ch">
+              <span className="n">{i + 1}</span>
+              <span className="t">{c.title ?? "Untitled"}</span>
+              <span className="w">{c.word_count.toLocaleString()} words</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showPreview && (
+        <pre className="cms-manuscript-preview">
+          {ms.preview}{ms.word_count > 600 ? "\n\n…" : ""}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 // ── Main BookDashboard ─────────────────────────────────────────────────────────
 export default function BookDashboard({ user, book }: Props) {
   const [chapters, setChapters]   = useState<CmsChapter[]>([]);
@@ -395,10 +488,27 @@ export default function BookDashboard({ user, book }: Props) {
   const [compileResults, setCompileResults] = useState<CompileResult[] | null>(null);
   const [viewMs, setViewMs]       = useState<CmsChapter | null>(null);
   const [viewSegs, setViewSegs]   = useState<CmsChapter | null>(null);
+  const [manuscript, setManuscript] = useState<CmsManuscript | null>(null);
+  const [startingMs, setStartingMs] = useState(false);
 
   useEffect(() => {
     load();
+    cmsGetManuscript(book.id).then(setManuscript).catch(() => setManuscript(null));
   }, [book.id]);
+
+  // Poll while chapters are being created; new chapters appear as each one finishes.
+  useEffect(() => {
+    if (!manuscript?.running) return;
+    const t = setInterval(async () => {
+      try {
+        const ms = await cmsGetManuscript(book.id);
+        setManuscript(ms);
+        const chs = await cmsListChapters(book.id);
+        setChapters(chs);
+      } catch { /* transient — retry next tick */ }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [manuscript?.running, book.id]);
 
   async function load() {
     setLoading(true);
@@ -426,6 +536,20 @@ export default function BookDashboard({ user, book }: Props) {
       [viewSegs.id]:   (prev[viewSegs.id]   ?? []).filter(s => s.id !== seg.id),
       [targetChapterId]: [...(prev[targetChapterId] ?? []), seg],
     }));
+  }
+
+  async function handleCreateFromManuscript() {
+    if (!window.confirm(
+      "Create chapters from this manuscript? Empty placeholder chapters will be replaced by the manuscript's chapters."
+    )) return;
+    setStartingMs(true);
+    setError(null);
+    try {
+      setManuscript(await cmsCreateChaptersFromManuscript(book.id));
+      const chs = await cmsListChapters(book.id);
+      setChapters(chs);
+    } catch (e) { setError(String(e)); }
+    finally { setStartingMs(false); }
   }
 
   async function handleCompileAll() {
@@ -503,6 +627,10 @@ export default function BookDashboard({ user, book }: Props) {
           {error}
           <button onClick={() => setError(null)}>×</button>
         </div>
+      )}
+
+      {manuscript?.manuscript_status && (
+        <ManuscriptSection ms={manuscript} starting={startingMs} onCreate={handleCreateFromManuscript} />
       )}
 
       {/* Compile results */}

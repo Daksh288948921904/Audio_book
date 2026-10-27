@@ -1,9 +1,11 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.db import get_db, Book, Chapter, AudioSegment
 from backend.services.vector_store import delete_collection
+from backend.services import manuscript
 from backend.auth import get_current_user
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -29,8 +31,20 @@ def _chapter_row(c: Chapter) -> dict:
         "status": c.status,
         "generated_text": c.generated_text,
         "summary": c.summary,
+        "from_manuscript": c.base_text is not None,
         "created_at": c.created_at,
         "finished_at": c.finished_at,
+    }
+
+
+_MAX_PDF_BYTES = 50 * 1024 * 1024
+
+
+def manuscript_info(b: Book) -> dict:
+    return {
+        "manuscript_filename": b.manuscript_filename,
+        "manuscript_status":   b.manuscript_status,
+        "manuscript_progress": b.manuscript_progress,
     }
 
 
@@ -53,6 +67,7 @@ def list_books(
             "created_at": b.created_at,
             "chapter_count": len(b.chapters),
             "done_count": sum(1 for c in b.chapters if c.status == "done"),
+            **manuscript_info(b),
         }
         for b in books
     ]
@@ -208,3 +223,43 @@ def create_book_chapters(
     for ch in sections:
         db.refresh(ch)
     return [_chapter_row(c) for c in sections]
+
+
+@router.post("/{book_id}/manuscript")
+async def upload_manuscript(
+    book_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if book.user_id != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Not your book")
+    if book.manuscript_status == "processing" and manuscript.is_running(book_id):
+        raise HTTPException(status_code=409, detail="Chapters are being created from your current manuscript")
+    if not (file.filename or "").lower().endswith(".pdf") and file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
+    content = await file.read()
+    if len(content) > _MAX_PDF_BYTES:
+        raise HTTPException(status_code=413, detail="PDF is larger than 50 MB")
+    try:
+        text, pages = manuscript.extract_pdf_text(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if len(text.split()) < 50:
+        raise HTTPException(
+            status_code=400,
+            detail="No readable text found in this PDF. Scanned/image-only PDFs aren't supported yet.",
+        )
+
+    book.manuscript_filename    = file.filename
+    book.manuscript_text        = text
+    book.manuscript_pages       = pages
+    book.manuscript_status      = "uploaded"
+    book.manuscript_progress    = None
+    book.manuscript_uploaded_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"id": book.id, **manuscript_info(book)}

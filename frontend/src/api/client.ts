@@ -25,7 +25,12 @@ export interface Book {
   created_at: string;
   chapter_count: number;
   done_count: number;
+  manuscript_filename: string | null;
+  manuscript_status: ManuscriptStatus | null;
+  manuscript_progress: string | null;
 }
+
+export type ManuscriptStatus = "uploaded" | "processing" | "done" | "error";
 
 export interface Chapter {
   id: number;
@@ -38,6 +43,7 @@ export interface Chapter {
   finished_at: string | null;
   generated_text?: string;
   summary?: string;
+  from_manuscript?: boolean;
 }
 
 export interface Segment {
@@ -120,6 +126,24 @@ export async function createBookChapters(
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function uploadManuscript(
+  bookId: number,
+  file: File,
+): Promise<Pick<Book, "id" | "manuscript_filename" | "manuscript_status" | "manuscript_progress">> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/books/${bookId}/manuscript`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? `Upload failed (${res.status})`);
+  }
   return res.json();
 }
 

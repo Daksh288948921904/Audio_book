@@ -37,6 +37,21 @@ export interface CmsBook {
   chapter_count: number;
   done_count: number;
   created_at: string;
+  manuscript_filename: string | null;
+  manuscript_status: "uploaded" | "processing" | "done" | "error" | null;
+  manuscript_progress: string | null;
+}
+
+export interface CmsManuscript {
+  manuscript_filename: string | null;
+  manuscript_status: CmsBook["manuscript_status"];
+  manuscript_progress: string | null;
+  manuscript_pages: number | null;
+  manuscript_uploaded_at: string | null;
+  word_count: number;
+  running: boolean;
+  preview: string;
+  detected_chapters: { title: string | null; word_count: number }[];
 }
 
 export interface CmsChapter {
@@ -48,6 +63,7 @@ export interface CmsChapter {
   status: "recording" | "generating" | "done";
   generated_text?: string;
   summary?: string;
+  from_manuscript?: boolean;
   segment_count: number;
   created_at: string;
   finished_at: string | null;
@@ -90,6 +106,14 @@ export async function cmsListBooks(googleId: string): Promise<CmsBook[]> {
 
 export async function cmsListChapters(bookId: number): Promise<CmsChapter[]> {
   return (await apiFetch(`/admin/books/${bookId}/chapters`)).json();
+}
+
+export async function cmsGetManuscript(bookId: number): Promise<CmsManuscript> {
+  return (await apiFetch(`/admin/books/${bookId}/manuscript`)).json();
+}
+
+export async function cmsCreateChaptersFromManuscript(bookId: number): Promise<CmsManuscript> {
+  return (await apiFetch(`/admin/books/${bookId}/manuscript/create-chapters`, { method: "POST" })).json();
 }
 
 export async function cmsGetChapter(chapterId: number): Promise<CmsChapter> {
