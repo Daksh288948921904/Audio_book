@@ -27,6 +27,12 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")   # None = local Docker (no auth)
 
 # --- Database ---
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./audiobook.db")
+# Pin the driver we install (psycopg2-binary): SQLAlchemy 2.1+ maps a bare
+# postgresql:// URL to psycopg v3, and some hosts still hand out postgres://.
+for _prefix in ("postgres://", "postgresql://"):
+    if DATABASE_URL.startswith(_prefix):
+        DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len(_prefix):]
+        break
 
 # --- File Storage ---
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
