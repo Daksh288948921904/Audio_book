@@ -63,6 +63,9 @@ async def _audio_cleanup_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Chapters a deploy/restart interrupted mid-write go back in the queue.
+    from backend.services.pipeline import resume_interrupted
+    resume_interrupted()
     # Pre-load embedding model at startup so first upload isn't delayed by download
     from backend.services.vector_store import _get_embedder
     _get_embedder()

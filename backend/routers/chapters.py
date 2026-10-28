@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.db import get_db, Chapter, AudioSegment
-from backend.services.pipeline import finish_chapter
+from backend.services import pipeline
 from backend.services.vector_store import delete_collection
 from backend.auth import get_current_user, require_admin
 
@@ -70,23 +70,19 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
     }
 
 
-@router.post("/{chapter_id}/finish")
+@router.post("/{chapter_id}/finish", status_code=202)
 def finish(chapter_id: int, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     if chapter.status == "done":
         raise HTTPException(status_code=400, detail="Chapter is already done")
-    # If stuck in "generating" after a server restart, reset so it can retry.
-    # If actively generating (lock held), finish_chapter raises RuntimeError → 409.
-    if chapter.status == "generating":
-        chapter.status = "recording"
-        db.commit()
-    try:
-        generated_text, _ = finish_chapter(db, chapter_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-    return {"status": "done", "generated_text": generated_text}
+    # Generation runs in the background (long chapters take many minutes); poll the
+    # chapter until its status leaves "generating". A chapter shown as "generating"
+    # but not queued (shouldn't happen — restarts re-queue) is simply queued again.
+    if not pipeline.enqueue(db, [chapter_id]):
+        raise HTTPException(status_code=409, detail="Chapter is already being written")
+    return {"status": "generating"}
 
 
 @router.get("/{chapter_id}/pdf")

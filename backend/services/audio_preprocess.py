@@ -48,7 +48,7 @@ def preprocess_audio(src_path: str) -> str | None:
             ],
             check=True,
             capture_output=True,
-            timeout=120,
+            timeout=900,
         )
 
         logger.info("audio_preprocess: %s -> %s (ok)", src_path, dst_path)
@@ -78,7 +78,7 @@ def _build_filter(src_path: str) -> str:
             ],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=600,
         )
         stats = _parse_loudnorm_json(result.stderr)
         if stats:

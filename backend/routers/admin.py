@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from backend.db import get_db, User, Book, Chapter, AudioSegment
 from backend.auth import require_admin
-from backend.services.pipeline import finish_chapter, _display_number
+from backend.services import pipeline
+from backend.services.pipeline import _display_number
 from backend.services.pdf import generate_pdf
 from backend.services import storage, manuscript
 from backend.routers.books import manuscript_info
@@ -224,6 +225,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "generated_text": c.generated_text,
             "summary":       c.summary,
             "from_manuscript": c.base_text is not None,
+            "generation_error": pipeline.last_error(c.id) if c.status == "recording" else None,
             "segment_count": db.query(AudioSegment).filter(AudioSegment.chapter_id == c.id).count(),
             "created_at":    c.created_at,
             "finished_at":   c.finished_at,
@@ -245,6 +247,8 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin
         "status":        chapter.status,
         "generated_text": chapter.generated_text,
         "summary":       chapter.summary,
+        "from_manuscript": chapter.base_text is not None,
+        "generation_error": pipeline.last_error(chapter.id) if chapter.status == "recording" else None,
         "created_at":    chapter.created_at,
         "finished_at":   chapter.finished_at,
     }
@@ -264,19 +268,23 @@ def compile_book(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
         .all()
     )
 
+    # Queued in the background, written one at a time in chapter order so each
+    # chapter gets the previous one's summary as context.
     results = []
+    to_queue = []
     for ch in chapters:
         seg_count = db.query(AudioSegment).filter(AudioSegment.chapter_id == ch.id).count()
         if seg_count == 0:
             results.append({"chapter_id": ch.id, "number": ch.number, "status": "skipped", "reason": "no segments"})
-            continue
-        try:
-            generated_text, _ = finish_chapter(db, ch.id)
-            # Refresh after finish so we get updated status
-            db.refresh(ch)
-            results.append({"chapter_id": ch.id, "number": ch.number, "status": "done", "generated_text": generated_text})
-        except Exception as e:
-            results.append({"chapter_id": ch.id, "number": ch.number, "status": "error", "reason": str(e)})
+        else:
+            to_queue.append(ch)
+    queued = set(pipeline.enqueue(db, [ch.id for ch in to_queue]))
+    for ch in to_queue:
+        if ch.id in queued:
+            results.append({"chapter_id": ch.id, "number": ch.number, "status": "queued"})
+        else:
+            results.append({"chapter_id": ch.id, "number": ch.number, "status": "skipped", "reason": "already being written"})
+    results.sort(key=lambda r: r["number"])
 
     return {"book_id": book_id, "results": results}
 

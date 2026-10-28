@@ -72,6 +72,20 @@ export default function App() {
     return () => clearInterval(t);
   }, [activeManuscriptStatus, activeBookId]);
 
+  // Chapters are written in the background — refresh while any is being written.
+  const anyGenerating = chapters.some((c) => c.status === "generating");
+  useEffect(() => {
+    if (!anyGenerating || activeBookId == null) return;
+    const bookId = activeBookId;
+    const t = setInterval(async () => {
+      try {
+        const chs = await listBookChapters(bookId);
+        setChapters((prev) => chs.map((c) => prev.find((p) => p.id === c.id && p.status === c.status) ?? c));
+      } catch { /* transient — retry next tick */ }
+    }, 10_000);
+    return () => clearInterval(t);
+  }, [anyGenerating, activeBookId]);
+
   async function loadBooks() {
     try {
       const bs = await listBooks();
@@ -109,7 +123,8 @@ export default function App() {
     setLoading(true);
   }
 
-  function handleBookCreated(book: Book) {
+  function handleBookCreated(book: Book, warning?: string) {
+    if (warning) setGlobalError(warning);
     setBooks((prev) => [...prev, book]);
     setActiveBookId(book.id);
     setShowNewBook(false);
@@ -140,9 +155,13 @@ export default function App() {
     setPending({ blob, filename });
   }
 
-  function handleAssigned(chapterId: number, seg: Segment) {
+  function handleSegmentAdded(chapterId: number, seg: Segment) {
     setSegsMap((prev) => ({ ...prev, [chapterId]: [...(prev[chapterId] ?? []), seg] }));
     setBooks((prev) => prev.map((b) => b.id === activeBookId ? { ...b } : b));
+  }
+
+  function handleAssigned(chapterId: number, seg: Segment) {
+    handleSegmentAdded(chapterId, seg);
     setPending(null);
   }
 
@@ -331,7 +350,8 @@ export default function App() {
           <div className="welcome">
             <div className="welcome-orb">✍</div>
             <h1>Start your first book</h1>
-            <p>Record your voice, assign segments to chapters, and watch them become a finished manuscript.</p>
+            <p>Record your voice, assign segments to chapters, and watch them become a finished manuscript.
+              Already written it? Upload your manuscript PDF when you create the book.</p>
             <button className="btn-create-first" onClick={() => setShowNewBook(true)}>
               + Create a Book
             </button>
@@ -342,10 +362,6 @@ export default function App() {
               <div className="book-header-left">
                 <div className="book-header-eyebrow">Current Book</div>
                 <div className="book-header-title">{activeBook.title}</div>
-                <ManuscriptButton
-                  book={activeBook}
-                  onUploaded={(patch) => setBooks((prev) => prev.map((b) => b.id === activeBook.id ? { ...b, ...patch } : b))}
-                />
               </div>
               <div className="book-header-stats">
                 <div className="stat-pill">
@@ -363,6 +379,11 @@ export default function App() {
               </div>
             </div>
 
+            <ManuscriptButton
+              book={activeBook}
+              onUploaded={(patch) => setBooks((prev) => prev.map((b) => b.id === activeBook.id ? { ...b, ...patch } : b))}
+            />
+
             <div className="book-content">
               <RecordZone onRecorded={handleRecorded} />
 
@@ -379,7 +400,7 @@ export default function App() {
                           allChapters={chapters} index={i} displayNum={displayNum(ch)}
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                           onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
-                          onViewManuscript={handleViewManuscript} />
+                          onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded} />
                       ))}
                     </div>
                   </>
@@ -396,7 +417,7 @@ export default function App() {
                       allChapters={chapters} index={i} displayNum={displayNum(ch)}
                       onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                       onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
-                      onViewManuscript={handleViewManuscript} />
+                      onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded} />
                   ))}
                 </div>
 
@@ -412,7 +433,7 @@ export default function App() {
                           allChapters={chapters} index={i} displayNum={displayNum(ch)}
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                           onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
-                          onViewManuscript={handleViewManuscript} />
+                          onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded} />
                       ))}
                     </div>
                   </>

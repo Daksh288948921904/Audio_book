@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { createBook, createBookChapters, type Book } from "../api/client";
+import { useRef, useState } from "react";
+import { createBook, createBookChapters, uploadManuscript, type Book } from "../api/client";
 
 interface Props {
-  onCreated: (book: Book) => void;
+  /** warning: set when the book was created but the manuscript upload failed */
+  onCreated: (book: Book, warning?: string) => void;
   onClose: () => void;
 }
 
@@ -26,6 +27,8 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
   const [custom, setCustom] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState<string | null>(null);
+  const [pdf, setPdf]       = useState<File | null>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
 
   const finalCount = custom ? Math.max(1, Math.min(50, parseInt(custom) || 1)) : count;
 
@@ -41,8 +44,15 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
     setError(null);
     try {
       const book = await createBook(title.trim(), genre);
-      const chapters = await createBookChapters(book.id, finalCount, prologue, epilogue);
-      onCreated({ ...book, chapter_count: chapters.length, done_count: 0 });
+      // With a manuscript, its chapters replace the numbered placeholders — only create the matter sections.
+      const chapters = await createBookChapters(book.id, pdf ? 0 : finalCount, prologue && !pdf, epilogue && !pdf);
+      const created: Book = { ...book, chapter_count: chapters.length, done_count: 0 };
+      if (!pdf) { onCreated(created); return; }
+      try {
+        onCreated({ ...created, ...(await uploadManuscript(book.id, pdf)) });
+      } catch (e) {
+        onCreated(created, `Book created, but the manuscript upload failed: ${e instanceof Error ? e.message : e}. Use "Upload Manuscript PDF" to try again.`);
+      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -68,6 +78,40 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
           />
         </div>
 
+        {/* Manuscript (optional) */}
+        <div className="field">
+          <label>Already written your book? <span style={{ fontWeight: 400, color: "var(--text-3)" }}>(optional)</span></label>
+          <input
+            ref={pdfRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            hidden
+            onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
+          />
+          <div className="ms-upload" style={{ marginTop: 0 }}>
+            <button type="button" className="ms-upload-btn" onClick={() => pdfRef.current?.click()} disabled={loading}>
+              📄 {pdf ? "Change PDF" : "Upload Manuscript PDF"}
+            </button>
+            {pdf && (
+              <div className="ms-upload-status">
+                <span className="ms-upload-file">{pdf.name}</span>
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  style={{ padding: "2px 8px", fontSize: 11 }}
+                  onClick={() => { setPdf(null); if (pdfRef.current) pdfRef.current.value = ""; }}
+                  disabled={loading}
+                >Remove</button>
+              </div>
+            )}
+          </div>
+          {pdf && (
+            <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+              Our editors will polish it and split it into chapters — you can add voice recordings to any of them.
+            </div>
+          )}
+        </div>
+
         {/* Genre */}
         <div className="field">
           <label>Genre</label>
@@ -91,6 +135,7 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
           </div>
         </div>
 
+        {!pdf && <>
         {/* Structure */}
         <div className="field">
           <label>Structure</label>
@@ -146,20 +191,22 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
           </div>
         </div>
 
+        </>}
+
         {/* Auto-included sections preview */}
         <div className="nb-sections-preview">
           <div className="nb-sections-row">
             <div className="nb-sections-col">
               <div className="nb-sections-heading">Front Matter</div>
               {FRONT_MATTER[genre].map((s) => <div key={s} className="nb-section-item">· {s}</div>)}
-              {prologue && <div className="nb-section-item nb-section-body">· Prologue</div>}
+              {prologue && !pdf && <div className="nb-section-item nb-section-body">· Prologue</div>}
             </div>
             <div className="nb-sections-col nb-sections-mid">
               <div className="nb-sections-heading">Chapters</div>
               <div className="nb-section-item nb-section-body">
-                · {finalCount} chapter{finalCount !== 1 ? "s" : ""}
+                {pdf ? "· From your manuscript" : `· ${finalCount} chapter${finalCount !== 1 ? "s" : ""}`}
               </div>
-              {epilogue && <div className="nb-section-item nb-section-body">· Epilogue</div>}
+              {epilogue && !pdf && <div className="nb-section-item nb-section-body">· Epilogue</div>}
             </div>
             <div className="nb-sections-col">
               <div className="nb-sections-heading">Back Matter</div>
@@ -167,7 +214,7 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
             </div>
           </div>
           <div className="nb-sections-total">
-            {FRONT_MATTER[genre].length + (prologue ? 1 : 0) + finalCount + (epilogue ? 1 : 0) + BACK_MATTER[genre].length} total recordable sections
+            {pdf ? "Chapters are created from your manuscript" : <>{FRONT_MATTER[genre].length + (prologue ? 1 : 0) + finalCount + (epilogue ? 1 : 0) + BACK_MATTER[genre].length} total recordable sections</>}
           </div>
         </div>
 
@@ -184,7 +231,7 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
             {loading ? (
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
                 <span className="spinner" style={{ borderTopColor: "#fff" }} />
-                Creating…
+                {pdf ? "Creating & uploading…" : "Creating…"}
               </span>
             ) : `Create Book →`}
           </button>

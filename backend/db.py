@@ -6,6 +6,9 @@ from backend.config import DATABASE_URL
 # SQLite needs check_same_thread=False; PostgreSQL does not accept it
 _is_sqlite = DATABASE_URL.startswith("sqlite")
 _engine_kwargs: dict = {"pool_pre_ping": True}
+# Default 5+10 ran out under load (40 request threads + background jobs) → 500s after 30 s.
+# 30 total stays well inside Supabase's direct-connection limit.
+_engine_kwargs.update(pool_size=10, max_overflow=20)
 if _is_sqlite:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 engine = create_engine(DATABASE_URL, **_engine_kwargs)

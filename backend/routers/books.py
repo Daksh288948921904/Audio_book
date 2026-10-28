@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from backend.db import get_db, Book, Chapter, AudioSegment
 from backend.services.vector_store import delete_collection
@@ -246,7 +247,7 @@ async def upload_manuscript(
     if len(content) > _MAX_PDF_BYTES:
         raise HTTPException(status_code=413, detail="PDF is larger than 50 MB")
     try:
-        text, pages = manuscript.extract_pdf_text(content)
+        text, pages = await run_in_threadpool(manuscript.extract_pdf_text, content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if len(text.split()) < 50:

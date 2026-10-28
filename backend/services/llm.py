@@ -1,28 +1,117 @@
+import logging
+import re
 import time
+
+from groq import APIConnectionError, APITimeoutError
 
 from backend.config import GROQ_LLM_MODEL
 from backend.services.groq_pool import pool
 
-# Segments per LLM call. Each batch uses ~3 000–5 000 tokens (input + output),
-# well inside Groq's 12 000 TPM free-tier limit.
-_BATCH_SIZE = 5
+log = logging.getLogger(__name__)
 
-# Tokens to generate per batch. ~1 500 ≈ 1–2 pages of prose.
-_BATCH_OUTPUT_TOKENS = 1500
+# Notes per LLM call, in characters (~1 250 tokens). Batches are packed by size,
+# not count — five 10-minute recordings in one call blew past Groq's 12 000 TPM.
+_NOTES_BUDGET = 5000
+
+# Previous-chapter summaries fed into a chapter, in characters (~1 000 tokens).
+# Most recent chapters win when a long book doesn't fit.
+_CONTEXT_BUDGET = 4000
+
+# Tokens to generate per batch. ~2 000 ≈ 2–3 pages of prose.
+_BATCH_OUTPUT_TOKENS = 2000
 
 # Seconds to wait between batches so successive calls don't exceed 12 000 TPM.
-# At ~4 000 tokens per call: 12 000 / 4 000 = 3 calls/min → 1 call every 20 s.
+# At ~5 000 tokens per call that's ~2 calls/min including the call itself.
 _BATCH_DELAY = 20
+
+# Chapter text per summary call when a chapter is too long to summarise in one go.
+_SUMMARY_PIECE = 12000
+
+# Waits when every Groq key is rate-limited or the API is unreachable, so one
+# busy minute doesn't throw away a chapter that's half written.
+_RETRY_WAITS = (30, 60, 90, 120)
 
 
 def _chat(prompt: str, max_tokens: int = 4096) -> str:
-    result = pool.chat(
-        model=GROQ_LLM_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        temperature=0.7,
-    )
-    return result.choices[0].message.content.strip()
+    for attempt, wait in enumerate((*_RETRY_WAITS, None)):
+        try:
+            result = pool.chat(
+                model=GROQ_LLM_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=0.7,
+            )
+            return result.choices[0].message.content.strip()
+        except (RuntimeError, APIConnectionError, APITimeoutError) as exc:
+            if wait is None:
+                raise
+            log.warning("llm: %s — retry %d in %ds", exc, attempt + 1, wait)
+            time.sleep(wait)
+
+
+def _split_text(text: str, limit: int) -> list[str]:
+    """Split text into pieces of at most `limit` chars, at sentence ends where possible."""
+    text = text.strip()
+    if len(text) <= limit:
+        return [text] if text else []
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    pieces: list[str] = []
+    cur = ""
+    for sent in sentences:
+        while len(sent) > limit:  # a run-on with no sentence breaks (common in transcripts)
+            cut = sent.rfind(" ", 0, limit)
+            cut = cut if cut > 0 else limit
+            if cur:
+                pieces.append(cur)
+                cur = ""
+            pieces.append(sent[:cut].strip())
+            sent = sent[cut:].strip()
+        if cur and len(cur) + 1 + len(sent) > limit:
+            pieces.append(cur)
+            cur = sent
+        else:
+            cur = f"{cur} {sent}".strip()
+    if cur:
+        pieces.append(cur)
+    return pieces
+
+
+def _batch_segments(segments: list[dict]) -> list[list[dict]]:
+    """Pack segments, in order, into batches of at most _NOTES_BUDGET chars.
+    A recording longer than the budget is split across consecutive batches."""
+    batches: list[list[dict]] = []
+    cur: list[dict] = []
+    size = 0
+    for seg in segments:
+        for piece in _split_text(seg["text"], _NOTES_BUDGET):
+            if cur and size + len(piece) > _NOTES_BUDGET:
+                batches.append(cur)
+                cur, size = [], 0
+            cur.append({**seg, "text": piece})
+            size += len(piece)
+    if cur:
+        batches.append(cur)
+    return batches
+
+
+def _context_block(summaries: list[dict]) -> str:
+    """Previous-chapter summaries, newest kept first when they don't all fit."""
+    kept: list[str] = []
+    used = 0
+    for s in reversed(summaries):
+        text = s["text"].strip()
+        if kept and used + len(text) > _CONTEXT_BUDGET:
+            break
+        kept.append(text[:_CONTEXT_BUDGET])
+        used += len(text)
+    if not kept:
+        return ""
+    kept.reverse()
+    omitted = len(summaries) - len(kept)
+    lead = f"[{omitted} earlier chapter(s) omitted]\n\n" if omitted else ""
+    return "PREVIOUS CHAPTERS CONTEXT (oldest to most recent):\n" + lead + "\n\n".join(
+        f"[Summary]: {t}" for t in kept
+    ) + "\n\n"
 
 
 def _seg_block(segments: list[dict]) -> str:
@@ -36,17 +125,10 @@ def generate_chapter(chunks: list[dict], chapter_number: int, lead_in: str = "")
     """lead_in: existing chapter text (e.g. from an uploaded manuscript) that the
     generated prose must continue from rather than open fresh."""
     summaries = [c for c in chunks if c.get("type") == "summary"]
-    segments  = [c for c in chunks if c.get("type") == "segment"]
+    segments  = [c for c in chunks if c.get("type") == "segment" and c.get("text", "").strip()]
 
-    # Previous-chapter context (kept short — summaries are already concise)
-    context_block = ""
-    if summaries:
-        context_block = "PREVIOUS CHAPTERS CONTEXT:\n" + "\n\n".join(
-            f"[Summary]: {s['text']}" for s in summaries
-        ) + "\n\n"
-
-    # Split segments into batches
-    batches = [segments[i:i + _BATCH_SIZE] for i in range(0, len(segments), _BATCH_SIZE)]
+    context_block = _context_block(summaries)
+    batches = _batch_segments(segments)
 
     parts: list[str] = []
     prev_tail = lead_in[-600:]  # last ~600 chars of previous section for continuity
@@ -73,7 +155,9 @@ Rules:
 
 Begin writing:"""
         else:
-            prompt = f"""STORY SO FAR — end of previous section (continue seamlessly from here):
+            # The first pass of a manuscript chapter still needs the earlier chapters' context.
+            ctx = context_block if idx == 0 else ""
+            prompt = f"""{ctx}STORY SO FAR — end of previous section (continue seamlessly from here):
 {prev_tail}
 
 AUTHOR'S RAW NOTES TO CONTINUE WITH (in order):
@@ -104,14 +188,43 @@ Continue writing:"""
     return "\n\n".join(parts)
 
 
+_SUMMARY_RULES = (
+    "Capture key events, character developments, and tone. Be specific about how the chapter "
+    "ENDS — where the characters are, what has just happened, what is unresolved — because the "
+    "next chapter is written to continue from it."
+)
+
+
 def summarize_chapter(chapter_text: str, chapter_number: int) -> str:
-    prompt = f"""Summarize this book chapter in 3-5 sentences. Capture key events, character developments, and tone. This summary will be used as context for writing the next chapter.
+    pieces = _split_text(chapter_text, _SUMMARY_PIECE)
+    if len(pieces) <= 1:
+        return _chat(f"""Summarize this book chapter in 3-5 sentences. {_SUMMARY_RULES}
 
 Chapter text:
-{chapter_text[:3000]}
+{chapter_text}
 
-Summary:"""
-    return _chat(prompt, max_tokens=300)
+Summary:""", max_tokens=300)
+
+    # Long chapter: summarise each part, then merge — so the summary covers the whole
+    # chapter, not just its opening pages.
+    part_notes: list[str] = []
+    for i, piece in enumerate(pieces):
+        part_notes.append(_chat(f"""This is part {i + 1} of {len(pieces)} of a book chapter. Summarize what happens in it in 2-3 sentences.
+
+Text:
+{piece}
+
+Summary:""", max_tokens=200))
+        time.sleep(_BATCH_DELAY // 2)
+
+    joined = "\n".join(f"Part {i + 1}: {n}" for i, n in enumerate(part_notes))
+    return _chat(f"""Below are summaries of consecutive parts of one book chapter, in order.
+
+{joined}
+
+Combine them into one summary of the whole chapter in 4-6 sentences. {_SUMMARY_RULES}
+
+Summary:""", max_tokens=350)
 
 
 def enhance_passage(passage: str, prev_tail: str = "", genre: str = "fiction") -> str:

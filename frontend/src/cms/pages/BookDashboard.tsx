@@ -491,9 +491,19 @@ export default function BookDashboard({ user, book }: Props) {
   const [manuscript, setManuscript] = useState<CmsManuscript | null>(null);
   const [startingMs, setStartingMs] = useState(false);
 
+  function loadManuscript() {
+    cmsGetManuscript(book.id)
+      .then(setManuscript)
+      .catch((e) => setError(`Couldn't load the uploaded manuscript: ${e}`));
+  }
+
   useEffect(() => {
     load();
-    cmsGetManuscript(book.id).then(setManuscript).catch(() => setManuscript(null));
+    loadManuscript();
+    // The author may upload while this page is open — re-check when the admin comes back to the tab.
+    const onFocus = () => loadManuscript();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [book.id]);
 
   // Poll while chapters are being created; new chapters appear as each one finishes.
@@ -509,6 +519,17 @@ export default function BookDashboard({ user, book }: Props) {
     }, 5000);
     return () => clearInterval(t);
   }, [manuscript?.running, book.id]);
+
+  // Poll while any chapter is being written in the background.
+  const anyGenerating = chapters.some((c) => c.status === "generating");
+  useEffect(() => {
+    if (!anyGenerating) return;
+    const t = setInterval(async () => {
+      try { setChapters(await cmsListChapters(book.id)); }
+      catch { /* transient — retry next tick */ }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [anyGenerating, book.id]);
 
   async function load() {
     setLoading(true);
@@ -640,8 +661,8 @@ export default function BookDashboard({ user, book }: Props) {
           {compileResults.map((r) => (
             <div key={r.chapter_id} className="cms-result-row">
               <span className="r-ch">Chapter {r.number}</span>
-              <span className={`r-status ${r.status === "done" ? "r-done" : r.status === "error" ? "r-error" : "r-skip"}`}>
-                {r.status === "done" ? "✓ Written" : r.status === "skipped" ? "— Skipped" : "✗ Error"}
+              <span className={`r-status ${r.status === "done" || r.status === "queued" ? "r-done" : r.status === "error" ? "r-error" : "r-skip"}`}>
+                {r.status === "done" ? "✓ Written" : r.status === "queued" ? "⏳ Queued — written in chapter order" : r.status === "skipped" ? "— Skipped" : "✗ Error"}
               </span>
               {r.reason && <span style={{ fontSize: 12, color: "var(--text-3)" }}>{r.reason}</span>}
             </div>

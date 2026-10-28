@@ -58,16 +58,16 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     };
   }, []);
 
-  const isActivelyWriting = writing;
-  const isStuck           = chapter.status === "generating" && !writing;
+  // Writing runs in the background; the dashboard polls and updates the chapter.
+  const isActivelyWriting = writing || chapter.status === "generating";
   const gradient          = GRADIENTS[index % GRADIENTS.length];
 
   async function handleWrite() {
     setWriting(true);
     setError(null);
     try {
-      const r = await cmsFinishChapter(chapter.id);
-      onUpdated({ ...chapter, status: "done", generated_text: r.generated_text });
+      await cmsFinishChapter(chapter.id);
+      onUpdated({ ...chapter, status: "generating", generation_error: null });
     } catch (e) { setError(String(e)); }
     finally { setWriting(false); }
   }
@@ -125,13 +125,11 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
 
   function badgeClass() {
     if (isActivelyWriting) return "adm-badge adm-badge-generating";
-    if (isStuck)           return "adm-badge adm-badge-stuck";
     return `adm-badge adm-badge-${chapter.status}`;
   }
 
   function badgeLabel() {
     if (isActivelyWriting) return "Writing";
-    if (isStuck)           return "Stuck";
     return chapter.status === "done" ? "Complete" : "Recording";
   }
 
@@ -139,10 +137,9 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     <div className="adm-card" style={{ background: gradient }}>
       <div>
         <div className={badgeClass()}>
-          {chapter.status === "recording" && !isActivelyWriting && !isStuck && <span className="pip-rec" />}
+          {chapter.status === "recording" && !isActivelyWriting && <span className="pip-rec" />}
           {isActivelyWriting && <span className="pip-gen" />}
-          {isStuck && <span className="pip-stuck" />}
-          {chapter.status === "done" && !isStuck && <span className="pip-done" />}
+          {chapter.status === "done" && <span className="pip-done" />}
           {badgeLabel()}
         </div>
 
@@ -166,31 +163,25 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
         {isActivelyWriting && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 12, color: "#fbbf24" }}>
             <div className="cms-spinner" style={{ borderTopColor: "#fbbf24", width: 12, height: 12, borderWidth: 1.5 }} />
-            Writing… (20–60 s)
+            Writing… long chapters take several minutes — safe to leave this page.
           </div>
         )}
 
-        {isStuck && (
-          <div style={{ fontSize: 11, color: "#fb923c", marginTop: 6, lineHeight: 1.45 }}>
-            Previous generation got stuck. Click Retry to try again.
-          </div>
-        )}
-
-        {error && (
+        {(error || (!isActivelyWriting && chapter.generation_error)) && (
           <div style={{ fontSize: 11, color: "#fb7185", marginTop: 6, lineHeight: 1.4 }}>
-            {error}
+            {error ?? `Last write failed: ${chapter.generation_error} — click Write to try again.`}
           </div>
         )}
       </div>
 
       {!isActivelyWriting && (
         <div className="adm-actions">
-          {(chapter.status === "recording" || isStuck) && (segments.length > 0 || chapter.from_manuscript) && (
+          {chapter.status === "recording" && (segments.length > 0 || chapter.from_manuscript) && (
             <button className="adm-btn adm-btn-write" onClick={handleWrite} disabled={writing}>
-              {isStuck ? "↺ Retry Write" : chapter.section_type === "chapter" ? "✦ Write Chapter" : "✦ Write Section"}
+              {chapter.section_type === "chapter" ? "✦ Write Chapter" : "✦ Write Section"}
             </button>
           )}
-          {chapter.status === "done" && !isStuck && (
+          {chapter.status === "done" && (
             <>
               <button className="adm-btn adm-btn-view" onClick={() => onViewManuscript(chapter)}>
                 View Manuscript

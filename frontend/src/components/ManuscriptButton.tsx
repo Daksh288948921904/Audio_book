@@ -38,7 +38,27 @@ export default function ManuscriptButton({ book, onUploaded }: Props) {
   }
 
   return (
-    <div className="ms-upload">
+    <div className="ms-strip">
+      <div className="ms-strip-text">
+        {status ? (
+          <>
+            <div className="ms-strip-title">📄 Your manuscript</div>
+            <div className={`ms-upload-status ms-upload-${status}`}>
+              {status === "processing" && <span className="pip-gen" />}
+              <span className="ms-upload-file">{book.manuscript_filename}</span>
+              <span>· {status === "processing" && book.manuscript_progress ? book.manuscript_progress : STATUS_TEXT[status]}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="ms-strip-title">📄 Already written this book?</div>
+            <div className="ms-strip-sub">
+              Upload your manuscript PDF — our editors polish it and split it into chapters you can add voice recordings to.
+            </div>
+          </>
+        )}
+        {error && <div className="ms-upload-error">{error}</div>}
+      </div>
       <input
         ref={inputRef}
         type="file"
@@ -54,16 +74,8 @@ export default function ManuscriptButton({ book, onUploaded }: Props) {
       >
         {uploading
           ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Uploading…</>
-          : status ? "📄 Replace Manuscript PDF" : "📄 Upload Manuscript PDF"}
+          : status ? "Replace PDF" : "Upload Manuscript PDF"}
       </button>
-      {status && !uploading && (
-        <div className={`ms-upload-status ms-upload-${status}`}>
-          {status === "processing" && <span className="pip-gen" />}
-          <span className="ms-upload-file">{book.manuscript_filename}</span>
-          <span>· {status === "processing" && book.manuscript_progress ? book.manuscript_progress : STATUS_TEXT[status]}</span>
-        </div>
-      )}
-      {error && <div className="ms-upload-error">{error}</div>}
     </div>
   );
 }

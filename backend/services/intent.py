@@ -16,6 +16,9 @@ CANDIDATE_LABELS = [
     "informational", "reflective", "philosophical", "mysterious", "ominous",
 ]
 _LABELS_STR = ", ".join(CANDIDATE_LABELS)
+# The tone of the opening is enough, and a long recording's full transcript
+# would exceed the small model's per-request token limit.
+_MAX_CHARS = 4000
 
 
 def classify_intent(text: str) -> str:
@@ -33,7 +36,7 @@ def classify_intent(text: str) -> str:
                     "Reply with the single word only, no punctuation."
                 ),
             },
-            {"role": "user", "content": text},
+            {"role": "user", "content": text[:_MAX_CHARS]},
         ],
         max_tokens=5,
         temperature=0,

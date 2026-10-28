@@ -6,6 +6,7 @@ import {
   pdfUrl, getChapter, type Chapter, type Segment,
 } from "../api/client";
 import SegmentCard from "./SegmentCard";
+import ChapterRecorder from "./ChapterRecorder";
 
 const GRADIENTS = [
   "linear-gradient(145deg, #0f1f3d 0%, #1a3a6b 55%, #2a4f8f 100%)",
@@ -35,11 +36,12 @@ interface Props {
   onSegmentDeleted: (chapterId: number, segId: number) => void;
   onSegmentMoved: (segId: number, fromChapterId: number, toChapterId: number) => void;
   onViewManuscript: (ch: Chapter) => void;
+  onSegmentAdded: (chapterId: number, segment: Segment) => void;
 }
 
 export default function ChapterCard({
   chapter, segments, allChapters, index, displayNum,
-  onChapterUpdated, onChapterDeleted, onSegmentDeleted, onSegmentMoved, onViewManuscript,
+  onChapterUpdated, onChapterDeleted, onSegmentDeleted, onSegmentMoved, onViewManuscript, onSegmentAdded,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(false);
@@ -269,7 +271,7 @@ export default function ChapterCard({
               {isGenerating && (
                 <div className="cc-generating">
                   <div className="spinner" style={{ borderTopColor: "var(--amber)" }} />
-                  Writing your chapter… this usually takes 20–60 seconds.
+                  Writing your chapter… long chapters can take several minutes. It'll appear here when ready.
                 </div>
               )}
 
@@ -342,8 +344,16 @@ export default function ChapterCard({
 
               {!isGenerating && segments.length === 0 && chapter.status === "recording" && (
                 <div className="cc-empty-segs">
-                  No recordings yet — record above and assign this chapter.
+                  No recordings yet — record or upload audio for this chapter below.
                 </div>
+              )}
+
+              {!isGenerating && chapter.status === "recording" && (
+                <ChapterRecorder
+                  chapterId={chapter.id}
+                  chapterLabel={chapter.title || `Chapter ${displayNum ?? chapter.number}`}
+                  onAdded={(seg) => onSegmentAdded(chapter.id, seg)}
+                />
               )}
 
               {!isGenerating && (

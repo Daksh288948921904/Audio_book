@@ -64,6 +64,7 @@ export interface CmsChapter {
   generated_text?: string;
   summary?: string;
   from_manuscript?: boolean;
+  generation_error?: string | null;  // last background write failure, while back in "recording"
   segment_count: number;
   created_at: string;
   finished_at: string | null;
@@ -81,7 +82,7 @@ export interface CmsSegment {
 export interface CompileResult {
   chapter_id: number;
   number: number;
-  status: "done" | "skipped" | "error";
+  status: "queued" | "done" | "skipped" | "error";
   generated_text?: string;
   reason?: string;
 }
@@ -120,7 +121,8 @@ export async function cmsGetChapter(chapterId: number): Promise<CmsChapter> {
   return (await apiFetch(`/admin/chapters/${chapterId}`)).json();
 }
 
-export async function cmsFinishChapter(chapterId: number): Promise<{ status: string; generated_text: string }> {
+// Queues the chapter; it's written in the background — poll until status leaves "generating".
+export async function cmsFinishChapter(chapterId: number): Promise<{ status: string }> {
   return (await apiFetch(`/chapters/${chapterId}/finish`, { method: "POST" })).json();
 }
 

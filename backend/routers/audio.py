@@ -1,13 +1,18 @@
 import os
 import tempfile
+import threading
+import uuid
+from collections import defaultdict
 from typing import List
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from backend.db import get_db, AudioSegment, Chapter
-from backend.services.pipeline import process_audio_segment
+from backend.services.pipeline import analyze_audio, save_segment
 from backend.services.vector_store import delete_chunk_by_segment, add_chunk, ensure_collection
 from backend.services import storage
 from backend.config import UPLOAD_DIR
@@ -19,6 +24,21 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 _auth = Depends(get_current_user)
 
+# Uploads are held in memory; 150 MB is ~2½ hours of browser recording or ~2 hours of
+# 160 kbps MP3/M4A. Uncompressed WAV hits it at ~15 minutes.
+_MAX_UPLOAD_BYTES = 150 * 1024 * 1024
+
+
+# Uploads to the same chapter run one at a time so order_index stays unique and in arrival order.
+# Single gunicorn worker, so an in-process lock is enough.
+_chapter_locks: dict[int, threading.Lock] = defaultdict(threading.Lock)
+_chapter_locks_guard = threading.Lock()
+
+
+def _chapter_lock(chapter_id: int) -> threading.Lock:
+    with _chapter_locks_guard:
+        return _chapter_locks[chapter_id]
+
 
 @router.post("/upload/{chapter_id}")
 async def upload_audio(
@@ -27,32 +47,52 @@ async def upload_audio(
     db: Session = Depends(get_db),
     _: dict = _auth,
 ):
+    content = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Recording is over 150 MB — please export it as MP3 or M4A and upload again.",
+        )
+    # ffmpeg + transcription + embedding + storage take seconds; doing them on the event
+    # loop froze every other request on the (single) worker and got it killed under load.
+    return await run_in_threadpool(_process_upload, db, chapter_id, file.filename, file.content_type, content)
+
+
+def _process_upload(db: Session, chapter_id: int, filename: str | None, content_type: str | None, content: bytes) -> dict:
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     if chapter.status != "recording":
         raise HTTPException(status_code=400, detail="Chapter is not in recording state")
 
-    existing_count = db.query(AudioSegment).filter(AudioSegment.chapter_id == chapter_id).count()
-    order_index = existing_count + 1
-
-    object_name = f"ch{chapter_id}_seg{order_index}_{file.filename}"
-    content = await file.read()
-
     # Always write to a local temp file first — pipeline (ffmpeg + Whisper) needs a real path
-    suffix = os.path.splitext(file.filename or "audio.webm")[1] or ".webm"
+    suffix = os.path.splitext(filename or "audio.webm")[1] or ".webm"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
     try:
-        # Run transcription + intent + vector store on local temp file
-        segment = process_audio_segment(db, chapter_id, tmp_path, order_index)
+        # Transcribe outside the lock — a long recording takes minutes and would
+        # hold up every other upload to this chapter.
+        transcript, intent_label = analyze_audio(tmp_path)
+        db.commit()  # don't hold a pooled connection across the slow part
+        with _chapter_lock(chapter_id):
+            db.refresh(chapter)
+            if chapter.status != "recording":
+                raise HTTPException(
+                    status_code=409,
+                    detail="This chapter started being written while your recording was processing — reopen it and upload again.",
+                )
+            last = db.query(func.max(AudioSegment.order_index)).filter(AudioSegment.chapter_id == chapter_id).scalar()
+            order_index = (last or 0) + 1
+            segment = save_segment(db, chapter, tmp_path, transcript, intent_label, order_index)
+
+        # Unique name: order_index alone can repeat after a delete, and storage upserts.
+        object_name = f"ch{chapter_id}_seg{order_index}_{uuid.uuid4().hex[:8]}_{filename}"
 
         # After pipeline succeeds, upload to Supabase and update filename in DB
         if storage.enabled():
-            content_type = file.content_type or "audio/webm"
-            remote_url = storage.upload(object_name, content, content_type)
+            remote_url = storage.upload(object_name, content, content_type or "audio/webm")
             segment.filename = remote_url
             db.commit()
         else:
@@ -182,7 +222,8 @@ def move_segment(segment_id: int, body: MoveBody, db: Session = Depends(get_db),
     except Exception:
         pass  # vector store errors shouldn't block the move
 
-    new_order = db.query(AudioSegment).filter(AudioSegment.chapter_id == body.target_chapter_id).count() + 1
+    last = db.query(func.max(AudioSegment.order_index)).filter(AudioSegment.chapter_id == body.target_chapter_id).scalar()
+    new_order = (last or 0) + 1
     segment.chapter_id = body.target_chapter_id
     segment.order_index = new_order
     db.commit()

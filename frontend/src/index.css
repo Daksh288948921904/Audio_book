@@ -361,22 +361,31 @@ html, body, #root {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Manuscript PDF upload (book header) */
-.ms-upload { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+/* Manuscript PDF upload strip (every book, below the header) */
+.ms-strip {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin: 16px 32px 0; padding: 14px 18px; border-radius: 12px;
+  background: var(--violet-dim); border: 1px solid rgba(139,92,246,0.28);
+  flex-shrink: 0;
+}
+.ms-strip-text { flex: 1; min-width: 220px; }
+.ms-strip-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.ms-strip-sub { font-size: 12px; color: #a5a5c8; margin-top: 3px; line-height: 1.5; }
+.ms-upload { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ms-upload-btn {
   display: inline-flex; align-items: center; gap: 7px;
   font-size: 12px; font-weight: 600; font-family: var(--font);
   padding: 7px 13px; border-radius: 9px; cursor: pointer;
-  background: var(--violet-dim); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3);
+  background: var(--violet); color: #fff; border: 1px solid rgba(139,92,246,0.6);
   transition: opacity 0.15s, transform 0.1s;
 }
 .ms-upload-btn:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
 .ms-upload-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.ms-upload-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); min-width: 0; }
+.ms-upload-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); min-width: 0; margin-top: 3px; }
 .ms-upload-file { color: var(--text); font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-upload-processing { color: var(--amber-2); }
 .ms-upload-done { color: var(--green); }
-.ms-upload-error { font-size: 12px; color: var(--rose); }
+.ms-upload-error { font-size: 12px; color: var(--rose); margin-top: 4px; }
 
 .book-header-stats {
   display: flex;
@@ -878,6 +887,44 @@ html, body, #root {
 .cc-delete { background: none; color: var(--text-3); border: 1px solid var(--border); margin-left: auto; }
 .cc-gen:hover, .cc-view:hover, .cc-pdf:hover, .cc-reopen:hover, .cc-rename:hover { opacity: 0.82; transform: translateY(-1px); }
 .cc-delete:hover { color: var(--rose); border-color: rgba(248,113,113,0.3); }
+
+/* Per-chapter record / upload */
+.ch-rec {
+  border: 1px solid var(--border-b);
+  background: var(--blue-dim);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ch-rec-title { font-size: 12.5px; font-weight: 600; color: var(--blue-2); }
+.ch-rec-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ch-rec-btn, .ch-rec-upload {
+  padding: 9px 16px;
+  border-radius: var(--r);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: opacity .15s, transform .12s;
+}
+.ch-rec-btn {
+  border: none;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--violet) 100%);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(91,141,239,0.35);
+}
+.ch-rec-btn.recording {
+  background: var(--rose);
+  box-shadow: 0 3px 12px rgba(248,113,113,0.35);
+  font-variant-numeric: tabular-nums;
+}
+.ch-rec-upload { background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border-3); }
+.ch-rec-btn:hover:not(:disabled), .ch-rec-upload:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+.ch-rec-btn:disabled, .ch-rec-upload:disabled { opacity: 0.45; cursor: not-allowed; }
+.ch-rec-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
 
 /* ═══════════════════════════════════════════════════
    SEGMENT CARDS
