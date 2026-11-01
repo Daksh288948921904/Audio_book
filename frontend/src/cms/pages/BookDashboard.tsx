@@ -601,7 +601,7 @@ export default function BookDashboard({ user, book }: Props) {
 
   const doneCount = chapters.filter((c) => c.status === "done").length;
   const recordingWithSegs = chapters.filter(
-    (c) => c.status === "recording" && ((segsMap[c.id]?.length ?? 0) > 0 || !!c.pdf_filename || !!c.has_written)
+    (c) => c.status === "recording" && ((segsMap[c.id]?.length ?? 0) > 0 || !!c.has_text)
   );
   const totalSegs = Object.values(segsMap).reduce((a, v) => a + v.length, 0);
 

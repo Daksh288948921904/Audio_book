@@ -153,6 +153,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
           {chapter.from_manuscript && "📄 From manuscript · "}
           {chapter.pdf_filename && `📄 PDF: ${chapter.pdf_filename} · `}
           {chapter.has_written && "✍ Written text · "}
+          {(chapter.parts?.length ?? 0) > 0 && `${(chapter.parts?.length ?? 0) + 1} parts · `}
           {segments.length} recording{segments.length !== 1 ? "s" : ""}
         </div>
 
@@ -178,7 +179,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
 
       {!isActivelyWriting && (
         <div className="adm-actions">
-          {chapter.status === "recording" && (segments.length > 0 || chapter.from_manuscript || chapter.pdf_filename || chapter.has_written) && (
+          {chapter.status === "recording" && (segments.length > 0 || chapter.from_manuscript || chapter.has_text) && (
             <button className="adm-btn adm-btn-write" onClick={handleWrite} disabled={writing}>
               {chapter.section_type === "chapter" ? "✦ Write Chapter" : "✦ Write Section"}
             </button>

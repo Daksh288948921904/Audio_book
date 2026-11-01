@@ -3,7 +3,8 @@ import {
   deleteChapter, reopenChapter,
   updateChapterTitle, deleteSegment,
   reorderSegments, moveSegment,
-  pdfUrl, getChapter, type Chapter, type Segment,
+  pdfUrl, getChapter, addChapterPart, removeChapterPart,
+  type Chapter, type ChapterPart, type Segment,
 } from "../api/client";
 import SegmentCard from "./SegmentCard";
 import ChapterRecorder from "./ChapterRecorder";
@@ -159,6 +160,34 @@ export default function ChapterCard({
       } catch (e) { setError(String(e)); }
     }
     setEditTitle(false);
+  }
+
+  const parts = chapter.parts ?? [];
+  const chapterLabel = chapter.title || `Chapter ${displayNum ?? chapter.number}`;
+  const [addingPart, setAddingPart] = useState(false);
+
+  function updatePart(partId: number, patch: Partial<ChapterPart>) {
+    onChapterUpdated({ ...chapter, parts: parts.map((p) => p.id === partId ? { ...p, ...patch } : p) });
+  }
+
+  async function handleAddPart() {
+    setAddingPart(true);
+    setError(null);
+    try { onChapterUpdated({ ...chapter, parts: await addChapterPart(chapter.id) }); }
+    catch (e) { setError(String(e)); }
+    finally { setAddingPart(false); }
+  }
+
+  async function handleRemovePart(part: ChapterPart, index: number) {
+    const n = segments.filter((s) => s.part_id === part.id).length;
+    const what = [part.pdf_filename && "its PDF", part.has_written && "its text", n && `${n} recording${n !== 1 ? "s" : ""}`]
+      .filter(Boolean).join(", ");
+    if (!window.confirm(`Remove Part ${index + 2}${what ? ` with ${what}` : ""}? This can't be undone.`)) return;
+    try {
+      const remaining = await removeChapterPart(chapter.id, part.id);
+      segments.filter((s) => s.part_id === part.id).forEach((s) => onSegmentDeleted(chapter.id, s.id));
+      onChapterUpdated({ ...chapter, parts: remaining });
+    } catch (e) { setError(String(e)); }
   }
 
   async function handleDelSeg(segId: number) {
@@ -342,22 +371,50 @@ export default function ChapterCard({
                 </div>
               )}
 
-              {!isGenerating && segments.length === 0 && !chapter.pdf_filename && !chapter.has_written && chapter.status === "recording" && (
+              {!isGenerating && segments.length === 0 && !chapter.pdf_filename && !chapter.has_written && parts.length === 0 && chapter.status === "recording" && (
                 <div className="cc-empty-segs">
                   Nothing added yet — record, upload audio, attach a PDF, or write this chapter below.
                 </div>
               )}
 
               {!isGenerating && chapter.status === "recording" && (
-                <ChapterRecorder
-                  chapterId={chapter.id}
-                  chapterLabel={chapter.title || `Chapter ${displayNum ?? chapter.number}`}
-                  pdfFilename={chapter.pdf_filename}
-                  hasWritten={chapter.has_written}
-                  onAdded={(seg) => onSegmentAdded(chapter.id, seg)}
-                  onPdfChanged={(pdf_filename) => onChapterUpdated({ ...chapter, pdf_filename })}
-                  onWrittenChanged={(has_written) => onChapterUpdated({ ...chapter, has_written })}
-                />
+                <>
+                  <ChapterRecorder
+                    chapterId={chapter.id}
+                    title={parts.length ? `Part 1` : `Add to ${chapterLabel}`}
+                    chapterLabel={chapterLabel}
+                    recordingCount={segments.filter((s) => s.part_id == null).length}
+                    pdfFilename={chapter.pdf_filename}
+                    hasWritten={chapter.has_written}
+                    onAdded={(seg) => onSegmentAdded(chapter.id, seg)}
+                    onPdfChanged={(pdf_filename) => onChapterUpdated({ ...chapter, pdf_filename })}
+                    onWrittenChanged={(has_written) => onChapterUpdated({ ...chapter, has_written })}
+                  />
+                  {parts.map((part, i) => (
+                    <ChapterRecorder
+                      key={part.id}
+                      chapterId={chapter.id}
+                      partId={part.id}
+                      title={`Part ${i + 2}`}
+                      chapterLabel={`Part ${i + 2}`}
+                      recordingCount={segments.filter((s) => s.part_id === part.id).length}
+                      onRemove={() => handleRemovePart(part, i)}
+                      pdfFilename={part.pdf_filename}
+                      hasWritten={part.has_written}
+                      onAdded={(seg) => onSegmentAdded(chapter.id, seg)}
+                      onPdfChanged={(pdf_filename) => updatePart(part.id, { pdf_filename })}
+                      onWrittenChanged={(has_written) => updatePart(part.id, { has_written })}
+                    />
+                  ))}
+                  <button className="ch-add-part" onClick={handleAddPart} disabled={addingPart}>
+                    {addingPart ? "Adding…" : "＋ Add more"}
+                  </button>
+                  {parts.length > 0 && (
+                    <div className="ch-parts-note">
+                      Parts are written in order — each one continues from the part before it.
+                    </div>
+                  )}
+                </>
               )}
 
               {!isGenerating && (

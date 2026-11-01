@@ -67,6 +67,25 @@ class Chapter(Base):
 
     book     = relationship("Book", back_populates="chapters")
     segments = relationship("AudioSegment", back_populates="chapter", cascade="all, delete-orphan")
+    parts    = relationship("ChapterPart", back_populates="chapter", cascade="all, delete-orphan",
+                            order_by="ChapterPart.position")
+
+
+class ChapterPart(Base):
+    """Part 2, 3, … of a chapter ("+ Add more"). Part 1 is the chapter's own
+    pdf_*/written_text and its recordings with part_id NULL. Each part is written
+    in order: its PDF text, its typed text, then prose from its recordings."""
+    __tablename__ = "chapter_parts"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    chapter_id   = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
+    position     = Column(Integer, nullable=False)  # 2, 3, … (part 1 is the chapter itself)
+    pdf_filename = Column(String, nullable=True)
+    pdf_text     = Column(Text, nullable=True)
+    written_text = Column(Text, nullable=True)
+    created_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    chapter  = relationship("Chapter", back_populates="parts")
 
 
 class AudioSegment(Base):
@@ -78,6 +97,7 @@ class AudioSegment(Base):
     transcript      = Column(Text, nullable=True)
     intent          = Column(String, nullable=True)
     order_index     = Column(Integer, nullable=False)
+    part_id         = Column(Integer, ForeignKey("chapter_parts.id", ondelete="CASCADE"), nullable=True)  # NULL = part 1
     created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     file_expires_at = Column(DateTime, nullable=True)  # null once file has been deleted
 
@@ -129,6 +149,11 @@ def _sqlite_migrate():
                 conn.commit()
         conn.execute(text(_MOVE_TYPED_TEXT))
         conn.commit()
+
+        seg_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(audio_segments)")).fetchall()]
+        if "part_id" not in seg_cols:
+            conn.execute(text("ALTER TABLE audio_segments ADD COLUMN part_id INTEGER REFERENCES chapter_parts(id)"))
+            conn.commit()
         if "book_id" not in cols:
             conn.execute(text(
                 "ALTER TABLE chapters ADD COLUMN book_id INTEGER REFERENCES books(id) ON DELETE CASCADE"
@@ -196,6 +221,10 @@ def _postgres_migrate():
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_filename VARCHAR"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_text TEXT"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS written_text TEXT"))
+        conn.execute(text(
+            "ALTER TABLE audio_segments ADD COLUMN IF NOT EXISTS part_id INTEGER "
+            "REFERENCES chapter_parts(id) ON DELETE CASCADE"
+        ))
         conn.execute(text(_MOVE_TYPED_TEXT))
         for col, typ in _MANUSCRIPT_COLS:
             if typ == "TIMESTAMP":

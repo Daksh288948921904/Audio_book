@@ -46,6 +46,14 @@ export interface Chapter {
   from_manuscript?: boolean;
   pdf_filename?: string | null;  // chapter PDF attached but not yet written in
   has_written?: boolean;         // text typed in the app, not yet written in (goes after the PDF)
+  parts?: ChapterPart[];         // "+ Add more" parts 2, 3, … — part 1 is the chapter's own fields
+}
+
+export interface ChapterPart {
+  id: number;
+  position: number;
+  pdf_filename: string | null;
+  has_written: boolean;
 }
 
 export interface Segment {
@@ -55,7 +63,10 @@ export interface Segment {
   intent: string;
   filename: string;
   has_audio: boolean;
+  part_id?: number | null;  // null = part 1
 }
+
+const partQuery = (partId?: number | null) => (partId != null ? `?part_id=${partId}` : "");
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 export async function loginWithGoogle(
@@ -199,10 +210,10 @@ export async function reopenChapter(id: number): Promise<void> {
 }
 
 // ── Audio / Segments ──────────────────────────────────────────────────────────
-export async function uploadAudio(chapterId: number, file: File): Promise<Segment> {
+export async function uploadAudio(chapterId: number, file: File, partId?: number | null): Promise<Segment> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${BASE}/audio/upload/${chapterId}`, {
+  const res = await fetch(`${BASE}/audio/upload/${chapterId}${partQuery(partId)}`, {
     method: "POST",
     headers: authHeaders(), // auth only — browser sets Content-Type for FormData
     body: form,
@@ -211,33 +222,45 @@ export async function uploadAudio(chapterId: number, file: File): Promise<Segmen
   return res.json();
 }
 
-export async function uploadChapterPdf(chapterId: number, file: File): Promise<{ pdf_filename: string; pages: number; words: number }> {
+export async function uploadChapterPdf(chapterId: number, file: File, partId?: number | null): Promise<{ pdf_filename: string; pages: number; words: number }> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${BASE}/chapters/${chapterId}/pdf`, { method: "POST", headers: authHeaders(), body: form });
+  const res = await fetch(`${BASE}/chapters/${chapterId}/pdf${partQuery(partId)}`, { method: "POST", headers: authHeaders(), body: form });
   if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
-export async function removeChapterPdf(chapterId: number): Promise<void> {
-  const res = await fetch(`${BASE}/chapters/${chapterId}/pdf`, { method: "DELETE", headers: authHeaders() });
+export async function removeChapterPdf(chapterId: number, partId?: number | null): Promise<void> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/pdf${partQuery(partId)}`, { method: "DELETE", headers: authHeaders() });
   if (!res.ok) throw new Error(await errorDetail(res));
 }
 
-export async function getWrittenText(chapterId: number): Promise<string> {
-  const res = await fetch(`${BASE}/chapters/${chapterId}/written`, { headers: authHeaders() });
+export async function getWrittenText(chapterId: number, partId?: number | null): Promise<string> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/written${partQuery(partId)}`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await errorDetail(res));
   return (await res.json()).text;
 }
 
-export async function saveWrittenText(chapterId: number, text: string): Promise<boolean> {
-  const res = await fetch(`${BASE}/chapters/${chapterId}/written`, {
+export async function saveWrittenText(chapterId: number, text: string, partId?: number | null): Promise<boolean> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/written${partQuery(partId)}`, {
     method: "PUT",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
   if (!res.ok) throw new Error(await errorDetail(res));
   return (await res.json()).has_written;
+}
+
+export async function addChapterPart(chapterId: number): Promise<ChapterPart[]> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/parts`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return (await res.json()).parts;
+}
+
+export async function removeChapterPart(chapterId: number, partId: number): Promise<ChapterPart[]> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/parts/${partId}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return (await res.json()).parts;
 }
 
 async function errorDetail(res: Response): Promise<string> {

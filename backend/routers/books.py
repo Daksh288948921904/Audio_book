@@ -8,6 +8,7 @@ from backend.db import get_db, Book, Chapter, AudioSegment
 from backend.services.vector_store import delete_collection
 from backend.services import manuscript
 from backend.auth import get_current_user
+from backend.routers.chapters import part_rows
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -35,6 +36,7 @@ def _chapter_row(c: Chapter) -> dict:
         "from_manuscript": c.base_text is not None,
         "pdf_filename": c.pdf_filename if c.pdf_text else None,
         "has_written": bool(c.written_text),
+        "parts": part_rows(c),
         "created_at": c.created_at,
         "finished_at": c.finished_at,
     }

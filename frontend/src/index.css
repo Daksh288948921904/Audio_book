@@ -948,7 +948,37 @@ html, body, #root {
 }
 .ch-rec-pdf-remove:hover:not(:disabled) { color: var(--rose); }
 .ch-write { display: flex; flex-direction: column; gap: 6px; }
-.ch-write-label { font-size: 12px; font-weight: 600; color: var(--blue-2); margin-top: 4px; }
+.ch-rec-head { display: flex; align-items: center; gap: 10px; }
+.ch-rec-count { font-size: 11.5px; color: var(--text-2); }
+.ch-rec-part-remove {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.ch-rec-part-remove:hover:not(:disabled) { color: var(--rose); border-color: rgba(248,113,113,0.3); }
+.ch-add-part {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 11px 16px;
+  border-radius: var(--r);
+  border: 1px dashed var(--border-b);
+  background: transparent;
+  color: var(--blue-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.ch-add-part:hover:not(:disabled) { background: var(--blue-dim); }
+.ch-add-part:disabled { opacity: 0.5; cursor: wait; }
+.ch-parts-note { font-size: 11.5px; color: var(--text-2); text-align: center; margin-bottom: 14px; }
 .ch-write-box {
   width: 100%;
   min-height: 140px;

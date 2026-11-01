@@ -67,6 +67,8 @@ export interface CmsChapter {
   generation_error?: string | null;  // last background write failure, while back in "recording"
   pdf_filename?: string | null;      // chapter PDF attached by the author, written in on the next Write
   has_written?: boolean;             // text the author typed in the app, written in after the PDF
+  has_text?: boolean;                // any PDF or typed text in any part — enough to write the chapter
+  parts?: { id: number; position: number; pdf_filename: string | null; has_written: boolean }[];
   segment_count: number;
   created_at: string;
   finished_at: string | null;

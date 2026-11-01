@@ -3,6 +3,7 @@ import { getWrittenText, saveWrittenText } from "../api/client";
 
 interface Props {
   chapterId: number;
+  partId?: number | null;
   hasText: boolean;
   afterPdf: boolean;  // a PDF is attached — this box adds to it
   onSaved: (hasText: boolean) => void;
@@ -12,7 +13,7 @@ const SAVE_AFTER_MS = 1200;
 
 // Type the chapter here. Saves as you go, and when the chapter is closed; it's
 // handled like an attached PDF: polished and placed at the start of the chapter.
-export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }: Props) {
+export default function ChapterWriter({ chapterId, partId, hasText, afterPdf, onSaved }: Props) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(hasText);
   const [status, setStatus] = useState<"" | "saving" | "saved">("");
@@ -26,7 +27,7 @@ export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }:
 
   useEffect(() => {
     if (!hasText) return;
-    getWrittenText(chapterId)
+    getWrittenText(chapterId, partId)
       .then((t) => {
         savedRef.current = latestRef.current = t;
         setText(t);
@@ -35,7 +36,7 @@ export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }:
       .finally(() => setLoading(false));
     // Only on open: saving flips hasText, and the box already holds that text.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapterId]);
+  }, [chapterId, partId]);
 
   // One save at a time, in order, so an older save can't land last.
   function save() {
@@ -45,7 +46,7 @@ export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }:
       if (value === savedRef.current) return;
       setStatus("saving");
       try {
-        const has = await saveWrittenText(chapterId, value);
+        const has = await saveWrittenText(chapterId, value, partId);
         savedRef.current = value;
         setError(null);
         setStatus("saved");
@@ -71,7 +72,6 @@ export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }:
 
   return (
     <div className="ch-write">
-      {afterPdf && <div className="ch-write-label">✍ Add more</div>}
       <textarea
         className="ch-write-box"
         value={text}
@@ -79,8 +79,8 @@ export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }:
         onBlur={save}
         disabled={loading}
         placeholder={loading ? "Loading…" : afterPdf
-          ? "Write anything else for this chapter — it goes after the PDF text…"
-          : "Or write this chapter here…"}
+          ? "Write more — it goes after the PDF text…"
+          : "Or write here…"}
         aria-label="Write this chapter"
       />
       <div className="ch-write-meta">
@@ -91,7 +91,7 @@ export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }:
         <span className="ch-rec-pdf-note">
           {afterPdf
             ? "Polished and placed after the PDF text when the chapter is written; recordings continue after it."
-            : "Polished and placed at the start of this chapter when it's written; recordings continue after it."}
+            : "Polished when the chapter is written; recordings continue after it."}
         </span>
       )}
       {error && (

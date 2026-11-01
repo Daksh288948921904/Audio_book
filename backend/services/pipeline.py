@@ -44,7 +44,7 @@ def analyze_audio(audio_path: str) -> tuple[str, str]:
 
 
 def save_segment(db: Session, chapter: Chapter, audio_path: str, transcript: str,
-                 intent_label: str, order_index: int) -> AudioSegment:
+                 intent_label: str, order_index: int, part_id: int | None = None) -> AudioSegment:
     # Keep the audio file for 2 days, then the cleanup task will remove it
     expires_at = datetime.now(timezone.utc) + timedelta(days=2)
 
@@ -54,6 +54,7 @@ def save_segment(db: Session, chapter: Chapter, audio_path: str, transcript: str
         transcript=transcript,
         intent=intent_label,
         order_index=order_index,
+        part_id=part_id,
         file_expires_at=expires_at,
     )
     db.add(segment)
@@ -120,55 +121,59 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
         .order_by(Chapter.number)
         .all()
     )
-    chunks = [
+    summaries = [
         {"type": "summary", "text": prev.summary, "intent": "informational"}
         for prev in prev_chapters
-    ] + [
-        {"type": "segment", "text": seg.transcript, "intent": seg.intent or "informational", "segment_id": seg.id}
-        for seg in segs if seg.transcript
+    ]
+
+    def seg_chunks(part_id):
+        return [
+            {"type": "segment", "text": seg.transcript, "intent": seg.intent or "informational", "segment_id": seg.id}
+            for seg in segs if seg.transcript and seg.part_id == part_id
+        ]
+
+    # Part 1 is the chapter's own PDF/text/recordings; "+ Add more" parts follow in order.
+    parts = [(chapter.pdf_text, chapter.written_text, seg_chunks(None))] + [
+        (p.pdf_text, p.written_text, seg_chunks(p.id)) for p in chapter.parts
     ]
     number, base_text = chapter.number, chapter.base_text
-    pdf_text, written_text = chapter.pdf_text, chapter.written_text
     book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
     genre = (book.genre if book else None) or "fiction"
     # Release the DB connection while the LLM runs (minutes) so other requests can use the pool.
     # Don't touch ORM attributes until the next commit — that would reload and re-hold a connection.
     db.commit()
 
-    # A PDF the author attached and text they typed for this chapter are their own
-    # writing: polish them (same as manuscript chapters) and keep them, PDF first,
-    # as the chapter's fixed opening.
-    own_text = "\n\n".join(t for t in (pdf_text, written_text) if t)
-    if own_text:
-        from backend.services.manuscript import _passages
-        polished: list[str] = []
-        for i, passage in enumerate(_passages(own_text)):
-            if i:
+    # Manuscript chapters open with their uploaded text. Then each part in order:
+    # the author's own writing (attached PDF, then typed text) is polished, same as
+    # manuscript chapters, and its recordings are written as a continuation.
+    from backend.services.manuscript import _passages
+    pieces: list[str] = [base_text] if base_text else []
+    first_call = True
+    for i, (pdf_text, written_text, part_segs) in enumerate(parts):
+        own_text = "\n\n".join(t for t in (pdf_text, written_text) if t)
+        for passage in _passages(own_text) if own_text else []:
+            if not first_call:
                 time.sleep(llm._BATCH_DELAY)
-            tail = polished[-1][-600:] if polished else (base_text or "")[-600:]
-            polished.append(llm.enhance_passage(passage, tail, genre))
-        base_text = "\n\n".join(t for t in (base_text, *polished) if t)
-
-    # Generate chapter text. Manuscript chapters keep their uploaded text and
-    # the recorded material is written as a continuation of it.
-    if base_text:
-        has_segments = any(c.get("type") == "segment" for c in chunks)
-        new_prose = llm.generate_chapter(chunks, number, lead_in=base_text) if has_segments else ""
-        generated_text = "\n\n".join(t for t in (base_text, new_prose) if t)
-    else:
-        generated_text = llm.generate_chapter(chunks, number)
+            first_call = False
+            tail = "\n\n".join(pieces)[-600:]
+            pieces.append(llm.enhance_passage(passage, tail, genre))
+        if part_segs:
+            if not first_call:
+                time.sleep(llm._BATCH_DELAY)
+            # Earlier chapters' summaries go with the chapter's first recordings only.
+            context = summaries if not any(p[2] for p in parts[:i]) else []
+            first_call = False
+            prose = llm.generate_chapter(context + part_segs, number, lead_in="\n\n".join(pieces))
+            if prose:
+                pieces.append(prose)
+    generated_text = "\n\n".join(pieces)
 
     # Summarize
     summary = llm.summarize_chapter(generated_text, number)
 
-    # Persist to SQLite
+    # Persist. Parts keep their PDF/text, so a re-record rewrites the chapter in the same order.
     chapter.generated_text = generated_text
     chapter.summary = summary
-    if own_text:
-        # Polished once; from now on it's kept like manuscript text across re-records.
-        chapter.base_text = base_text
-        chapter.pdf_text = None
-        chapter.written_text = None
     chapter.status = "done"
     chapter.finished_at = datetime.now(timezone.utc)
     db.commit()

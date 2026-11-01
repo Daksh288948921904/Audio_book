@@ -4,7 +4,11 @@ import ChapterWriter from "./ChapterWriter";
 
 interface Props {
   chapterId: number;
+  partId?: number | null;     // an added part; null/undefined = part 1 (the chapter itself)
+  title: string;
   chapterLabel: string;
+  recordingCount: number;
+  onRemove?: () => void;      // added parts only
   pdfFilename?: string | null;
   hasWritten?: boolean;
   onAdded: (segment: Segment) => void;
@@ -16,7 +20,8 @@ type S = "idle" | "recording" | "uploading";
 
 // Record or upload audio, attach a written PDF, or type the chapter, straight into one chapter — no "which section?" step.
 export default function ChapterRecorder({
-  chapterId, chapterLabel, pdfFilename, hasWritten, onAdded, onPdfChanged, onWrittenChanged,
+  chapterId, partId, title, chapterLabel, recordingCount, onRemove,
+  pdfFilename, hasWritten, onAdded, onPdfChanged, onWrittenChanged,
 }: Props) {
   const [state, setState] = useState<S>("idle");
   const [seconds, setSeconds] = useState(0);
@@ -50,7 +55,7 @@ export default function ChapterRecorder({
     for (let i = 0; i < files.length; i++) {
       setProgress(files.length > 1 ? `Processing ${i + 1} of ${files.length}…` : "Processing your recording…");
       try {
-        onAdded(await uploadAudio(chapterId, files[i]));
+        onAdded(await uploadAudio(chapterId, files[i], partId));
       } catch (e) {
         failed.push(`${files[i].name}: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -92,7 +97,7 @@ export default function ChapterRecorder({
     setProgress("Reading your PDF…");
     setError(null);
     try {
-      const r = await uploadChapterPdf(chapterId, file);
+      const r = await uploadChapterPdf(chapterId, file, partId);
       setPdfInfo(`${r.pages} page${r.pages !== 1 ? "s" : ""} · ${r.words.toLocaleString()} words`);
       onPdfChanged(r.pdf_filename);
     } catch (err) {
@@ -107,7 +112,7 @@ export default function ChapterRecorder({
     if (!window.confirm(`Remove "${pdfFilename}" from ${chapterLabel}?`)) return;
     setError(null);
     try {
-      await removeChapterPdf(chapterId);
+      await removeChapterPdf(chapterId, partId);
       setPdfInfo(null);
       onPdfChanged(null);
     } catch (err) {
@@ -128,7 +133,17 @@ export default function ChapterRecorder({
 
   return (
     <div className="ch-rec">
-      <div className="ch-rec-title">Add to {chapterLabel}</div>
+      <div className="ch-rec-head">
+        <div className="ch-rec-title">{title}</div>
+        {recordingCount > 0 && (
+          <span className="ch-rec-count">🎙 {recordingCount} recording{recordingCount !== 1 ? "s" : ""}</span>
+        )}
+        {onRemove && (
+          <button className="ch-rec-part-remove" onClick={onRemove} disabled={busy || isRec} title="Remove this part">
+            Remove
+          </button>
+        )}
+      </div>
       <div className="ch-rec-row">
         <button
           className={`ch-rec-btn${isRec ? " recording" : ""}`}
@@ -153,11 +168,11 @@ export default function ChapterRecorder({
           {pdfInfo && <span>· {pdfInfo}</span>}
           <button className="ch-rec-pdf-remove" onClick={removePdf} disabled={busy || isRec} title="Remove PDF">×</button>
           <span className="ch-rec-pdf-note">
-            Polished and placed at the start of this chapter when it's written; recordings continue after it.
+            Polished and placed at the start of this part when the chapter is written; recordings continue after it.
           </span>
         </div>
       )}
-      <ChapterWriter chapterId={chapterId} hasText={!!hasWritten} afterPdf={!!attachedPdf} onSaved={onWrittenChanged} />
+      <ChapterWriter chapterId={chapterId} partId={partId} hasText={!!hasWritten} afterPdf={!!attachedPdf} onSaved={onWrittenChanged} />
       {busy && (
         <div className="ch-rec-status">
           <span className="spinner" style={{ width: 12, height: 12 }} /> {progress}
