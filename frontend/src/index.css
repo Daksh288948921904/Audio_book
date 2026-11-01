@@ -948,6 +948,7 @@ html, body, #root {
 }
 .ch-rec-pdf-remove:hover:not(:disabled) { color: var(--rose); }
 .ch-write { display: flex; flex-direction: column; gap: 6px; }
+.ch-write-label { font-size: 12px; font-weight: 600; color: var(--blue-2); margin-top: 4px; }
 .ch-write-box {
   width: 100%;
   min-height: 140px;

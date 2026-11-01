@@ -67,6 +67,7 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
         "status": chapter.status, "generated_text": chapter.generated_text,
         "summary": chapter.summary, "from_manuscript": chapter.base_text is not None,
         "pdf_filename": chapter.pdf_filename if chapter.pdf_text else None,
+        "has_written": bool(chapter.written_text),
         "created_at": chapter.created_at,
         "finished_at": chapter.finished_at,
     }
@@ -75,9 +76,6 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
 _MAX_CHAPTER_PDF_BYTES = 20 * 1024 * 1024
 # ~25k words — a long chapter. A whole book belongs in the book-level manuscript upload.
 _MAX_CHAPTER_PDF_CHARS = 150_000
-# Text typed into the chapter box goes the same way as an attached PDF's text
-# (pdf_text, polished on the next write); this name marks it as typed.
-_WRITTEN_FILENAME = "Written in the app"
 
 
 def _own_recording_chapter(db: Session, chapter_id: int, user: dict) -> Chapter:
@@ -141,23 +139,20 @@ def remove_chapter_pdf(chapter_id: int, db: Session = Depends(get_db), user: dic
 @router.get("/{chapter_id}/written")
 def get_written_text(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
     chapter = _own_recording_chapter(db, chapter_id, user)
-    return {"text": chapter.pdf_text if chapter.pdf_filename == _WRITTEN_FILENAME else ""}
+    return {"text": chapter.written_text or ""}
 
 
 @router.put("/{chapter_id}/written")
 def save_written_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db), user: dict = _auth):
     """Save what the author typed for this chapter; empty clears it. Handled like an
-    attached PDF: polished and placed at the start of the chapter when it's written."""
+    attached PDF and placed after it: polished at the start of the chapter when it's written."""
     chapter = _own_recording_chapter(db, chapter_id, user)
-    if chapter.pdf_text and chapter.pdf_filename != _WRITTEN_FILENAME:
-        raise HTTPException(status_code=409, detail="Remove the attached PDF before writing here")
     text = body.text.strip()
     if len(text) > _MAX_CHAPTER_PDF_CHARS:
         raise HTTPException(status_code=413, detail="This is too long for one chapter")
-    chapter.pdf_filename = _WRITTEN_FILENAME if text else None
-    chapter.pdf_text = text or None
+    chapter.written_text = text or None
     db.commit()
-    return {"id": chapter.id, "pdf_filename": chapter.pdf_filename}
+    return {"id": chapter.id, "has_written": bool(chapter.written_text)}
 
 
 @router.post("/{chapter_id}/finish", status_code=202)

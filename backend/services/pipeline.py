@@ -127,19 +127,22 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
         {"type": "segment", "text": seg.transcript, "intent": seg.intent or "informational", "segment_id": seg.id}
         for seg in segs if seg.transcript
     ]
-    number, base_text, pdf_text = chapter.number, chapter.base_text, chapter.pdf_text
+    number, base_text = chapter.number, chapter.base_text
+    pdf_text, written_text = chapter.pdf_text, chapter.written_text
     book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
     genre = (book.genre if book else None) or "fiction"
     # Release the DB connection while the LLM runs (minutes) so other requests can use the pool.
     # Don't touch ORM attributes until the next commit — that would reload and re-hold a connection.
     db.commit()
 
-    # A PDF the author attached to this chapter is their own writing: polish it
-    # (same as manuscript chapters) and keep it as the chapter's fixed opening.
-    if pdf_text:
+    # A PDF the author attached and text they typed for this chapter are their own
+    # writing: polish them (same as manuscript chapters) and keep them, PDF first,
+    # as the chapter's fixed opening.
+    own_text = "\n\n".join(t for t in (pdf_text, written_text) if t)
+    if own_text:
         from backend.services.manuscript import _passages
         polished: list[str] = []
-        for i, passage in enumerate(_passages(pdf_text)):
+        for i, passage in enumerate(_passages(own_text)):
             if i:
                 time.sleep(llm._BATCH_DELAY)
             tail = polished[-1][-600:] if polished else (base_text or "")[-600:]
@@ -161,10 +164,11 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
     # Persist to SQLite
     chapter.generated_text = generated_text
     chapter.summary = summary
-    if pdf_text:
+    if own_text:
         # Polished once; from now on it's kept like manuscript text across re-records.
         chapter.base_text = base_text
         chapter.pdf_text = None
+        chapter.written_text = None
     chapter.status = "done"
     chapter.finished_at = datetime.now(timezone.utc)
     db.commit()

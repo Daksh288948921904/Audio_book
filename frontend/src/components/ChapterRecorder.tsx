@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { removeChapterPdf, uploadAudio, uploadChapterPdf, WRITTEN_FILENAME, type Segment } from "../api/client";
+import { removeChapterPdf, uploadAudio, uploadChapterPdf, type Segment } from "../api/client";
 import ChapterWriter from "./ChapterWriter";
 
 interface Props {
   chapterId: number;
   chapterLabel: string;
   pdfFilename?: string | null;
+  hasWritten?: boolean;
   onAdded: (segment: Segment) => void;
   onPdfChanged: (pdfFilename: string | null) => void;
+  onWrittenChanged: (hasWritten: boolean) => void;
 }
 
 type S = "idle" | "recording" | "uploading";
 
 // Record or upload audio, attach a written PDF, or type the chapter, straight into one chapter — no "which section?" step.
-export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, onAdded, onPdfChanged }: Props) {
+export default function ChapterRecorder({
+  chapterId, chapterLabel, pdfFilename, hasWritten, onAdded, onPdfChanged, onWrittenChanged,
+}: Props) {
   const [state, setState] = useState<S>("idle");
   const [seconds, setSeconds] = useState(0);
   const [progress, setProgress] = useState<string | null>(null);
@@ -83,8 +87,7 @@ export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, 
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    const replacing = pdfFilename === WRITTEN_FILENAME ? "the text you wrote" : pdfFilename && `"${pdfFilename}"`;
-    if (replacing && !window.confirm(`Replace ${replacing} with "${file.name}"?`)) return;
+    if (pdfFilename && !window.confirm(`Replace "${pdfFilename}" with "${file.name}"?`)) return;
     setState("uploading");
     setProgress("Reading your PDF…");
     setError(null);
@@ -121,7 +124,7 @@ export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, 
   const isRec = state === "recording";
   const busy = state === "uploading";
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-  const attachedPdf = pdfFilename && pdfFilename !== WRITTEN_FILENAME ? pdfFilename : null;
+  const attachedPdf = pdfFilename || null;
 
   return (
     <div className="ch-rec">
@@ -144,7 +147,6 @@ export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, 
         </button>
         <input ref={pdfRef} type="file" accept="application/pdf,.pdf" hidden onChange={handlePdf} />
       </div>
-      {!attachedPdf && <ChapterWriter chapterId={chapterId} hasText={!!pdfFilename} onSaved={onPdfChanged} />}
       {attachedPdf && (
         <div className="ch-rec-pdf">
           <span className="ch-rec-pdf-name">📄 {attachedPdf}</span>
@@ -155,6 +157,7 @@ export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, 
           </span>
         </div>
       )}
+      <ChapterWriter chapterId={chapterId} hasText={!!hasWritten} afterPdf={!!attachedPdf} onSaved={onWrittenChanged} />
       {busy && (
         <div className="ch-rec-status">
           <span className="spinner" style={{ width: 12, height: 12 }} /> {progress}

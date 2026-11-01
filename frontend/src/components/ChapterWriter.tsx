@@ -4,14 +4,15 @@ import { getWrittenText, saveWrittenText } from "../api/client";
 interface Props {
   chapterId: number;
   hasText: boolean;
-  onSaved: (pdfFilename: string | null) => void;
+  afterPdf: boolean;  // a PDF is attached — this box adds to it
+  onSaved: (hasText: boolean) => void;
 }
 
 const SAVE_AFTER_MS = 1200;
 
 // Type the chapter here. Saves as you go, and when the chapter is closed; it's
 // handled like an attached PDF: polished and placed at the start of the chapter.
-export default function ChapterWriter({ chapterId, hasText, onSaved }: Props) {
+export default function ChapterWriter({ chapterId, hasText, afterPdf, onSaved }: Props) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(hasText);
   const [status, setStatus] = useState<"" | "saving" | "saved">("");
@@ -44,11 +45,11 @@ export default function ChapterWriter({ chapterId, hasText, onSaved }: Props) {
       if (value === savedRef.current) return;
       setStatus("saving");
       try {
-        const name = await saveWrittenText(chapterId, value);
+        const has = await saveWrittenText(chapterId, value);
         savedRef.current = value;
         setError(null);
         setStatus("saved");
-        onSavedRef.current(name);
+        onSavedRef.current(has);
       } catch (e) {
         setStatus("");
         setError(`Not saved: ${e instanceof Error ? e.message : String(e)}`);
@@ -70,13 +71,16 @@ export default function ChapterWriter({ chapterId, hasText, onSaved }: Props) {
 
   return (
     <div className="ch-write">
+      {afterPdf && <div className="ch-write-label">✍ Add more</div>}
       <textarea
         className="ch-write-box"
         value={text}
         onChange={(e) => change(e.target.value)}
         onBlur={save}
         disabled={loading}
-        placeholder={loading ? "Loading…" : "Or write this chapter here…"}
+        placeholder={loading ? "Loading…" : afterPdf
+          ? "Write anything else for this chapter — it goes after the PDF text…"
+          : "Or write this chapter here…"}
         aria-label="Write this chapter"
       />
       <div className="ch-write-meta">
@@ -85,7 +89,9 @@ export default function ChapterWriter({ chapterId, hasText, onSaved }: Props) {
       </div>
       {words > 0 && (
         <span className="ch-rec-pdf-note">
-          Polished and placed at the start of this chapter when it's written; recordings continue after it.
+          {afterPdf
+            ? "Polished and placed after the PDF text when the chapter is written; recordings continue after it."
+            : "Polished and placed at the start of this chapter when it's written; recordings continue after it."}
         </span>
       )}
       {error && (

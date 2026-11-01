@@ -59,6 +59,7 @@ class Chapter(Base):
     base_text      = Column(Text, nullable=True)  # enhanced manuscript text; audio prose is appended after it
     pdf_filename   = Column(String, nullable=True)  # chapter PDF the author attached, not yet written in
     pdf_text       = Column(Text, nullable=True)    # its raw text — polished into base_text on the next write
+    written_text   = Column(Text, nullable=True)    # text typed in the app; goes after the PDF text, same handling
     summary        = Column(Text, nullable=True)
     status         = Column(String, default="recording")  # recording | generating | done
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -93,6 +94,13 @@ _MANUSCRIPT_COLS = [
 ]
 
 
+# Typed text briefly shared the PDF slot, marked by this filename; give it its own column.
+_MOVE_TYPED_TEXT = (
+    "UPDATE chapters SET written_text = pdf_text, pdf_text = NULL, pdf_filename = NULL "
+    "WHERE pdf_filename = 'Written in the app'"
+)
+
+
 def _sqlite_migrate():
     """SQLite-only incremental migrations (not needed for fresh PostgreSQL)."""
     with engine.connect() as conn:
@@ -115,10 +123,12 @@ def _sqlite_migrate():
         if "base_text" not in cols:
             conn.execute(text("ALTER TABLE chapters ADD COLUMN base_text TEXT"))
             conn.commit()
-        for col, typ in (("pdf_filename", "VARCHAR"), ("pdf_text", "TEXT")):
+        for col, typ in (("pdf_filename", "VARCHAR"), ("pdf_text", "TEXT"), ("written_text", "TEXT")):
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE chapters ADD COLUMN {col} {typ}"))
                 conn.commit()
+        conn.execute(text(_MOVE_TYPED_TEXT))
+        conn.commit()
         if "book_id" not in cols:
             conn.execute(text(
                 "ALTER TABLE chapters ADD COLUMN book_id INTEGER REFERENCES books(id) ON DELETE CASCADE"
@@ -185,6 +195,8 @@ def _postgres_migrate():
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS base_text TEXT"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_filename VARCHAR"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_text TEXT"))
+        conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS written_text TEXT"))
+        conn.execute(text(_MOVE_TYPED_TEXT))
         for col, typ in _MANUSCRIPT_COLS:
             if typ == "TIMESTAMP":
                 typ = "TIMESTAMP WITH TIME ZONE"

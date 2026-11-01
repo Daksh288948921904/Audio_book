@@ -226,6 +226,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "summary":       c.summary,
             "from_manuscript": c.base_text is not None,
             "pdf_filename":  c.pdf_filename if c.pdf_text else None,
+            "has_written":   bool(c.written_text),
             "generation_error": pipeline.last_error(c.id) if c.status == "recording" else None,
             "segment_count": db.query(AudioSegment).filter(AudioSegment.chapter_id == c.id).count(),
             "created_at":    c.created_at,
@@ -250,6 +251,7 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin
         "summary":       chapter.summary,
         "from_manuscript": chapter.base_text is not None,
         "pdf_filename": chapter.pdf_filename if chapter.pdf_text else None,
+        "has_written": bool(chapter.written_text),
         "generation_error": pipeline.last_error(chapter.id) if chapter.status == "recording" else None,
         "created_at":    chapter.created_at,
         "finished_at":   chapter.finished_at,
@@ -276,8 +278,8 @@ def compile_book(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
     to_queue = []
     for ch in chapters:
         seg_count = db.query(AudioSegment).filter(AudioSegment.chapter_id == ch.id).count()
-        if seg_count == 0 and not ch.pdf_text:
-            results.append({"chapter_id": ch.id, "number": ch.number, "status": "skipped", "reason": "no recordings or PDF"})
+        if seg_count == 0 and not ch.pdf_text and not ch.written_text:
+            results.append({"chapter_id": ch.id, "number": ch.number, "status": "skipped", "reason": "nothing added yet"})
         else:
             to_queue.append(ch)
     queued = set(pipeline.enqueue(db, [ch.id for ch in to_queue]))
