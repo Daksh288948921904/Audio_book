@@ -1,11 +1,12 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
-from backend.db import get_db, Chapter, AudioSegment
-from backend.services import pipeline
+from backend.db import get_db, Book, Chapter, AudioSegment
+from backend.services import pipeline, manuscript
 from backend.services.vector_store import delete_collection
 from backend.auth import get_current_user, require_admin
 
@@ -65,9 +66,73 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
         "id": chapter.id, "number": chapter.number, "title": chapter.title,
         "status": chapter.status, "generated_text": chapter.generated_text,
         "summary": chapter.summary, "from_manuscript": chapter.base_text is not None,
+        "pdf_filename": chapter.pdf_filename if chapter.pdf_text else None,
         "created_at": chapter.created_at,
         "finished_at": chapter.finished_at,
     }
+
+
+_MAX_CHAPTER_PDF_BYTES = 20 * 1024 * 1024
+# ~25k words — a long chapter. A whole book belongs in the book-level manuscript upload.
+_MAX_CHAPTER_PDF_CHARS = 150_000
+
+
+def _own_recording_chapter(db: Session, chapter_id: int, user: dict) -> Chapter:
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
+    if book and book.user_id != user["sub"] and not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Not your book")
+    if chapter.status != "recording":
+        raise HTTPException(status_code=400, detail="Chapter is not in recording state")
+    return chapter
+
+
+@router.post("/{chapter_id}/pdf")
+async def upload_chapter_pdf(
+    chapter_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: dict = _auth,
+):
+    """Attach the author's written text for this chapter. It's polished and placed at
+    the start of the chapter when it's written; recordings continue after it."""
+    chapter = _own_recording_chapter(db, chapter_id, user)
+    if not (file.filename or "").lower().endswith(".pdf") and file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
+    content = await file.read(_MAX_CHAPTER_PDF_BYTES + 1)
+    if len(content) > _MAX_CHAPTER_PDF_BYTES:
+        raise HTTPException(status_code=413, detail="PDF is larger than 20 MB")
+    try:
+        text, pages = await run_in_threadpool(manuscript.extract_pdf_text, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    words = len(text.split())
+    if words < 20:
+        raise HTTPException(
+            status_code=400,
+            detail="No readable text found in this PDF. Scanned/image-only PDFs aren't supported yet.",
+        )
+    if len(text) > _MAX_CHAPTER_PDF_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"This PDF has {words:,} words — too long for one chapter. "
+                   "For a whole book, use \"Upload Manuscript PDF\" at the top of the book.",
+        )
+    chapter.pdf_filename = file.filename or "chapter.pdf"
+    chapter.pdf_text = text
+    db.commit()
+    return {"id": chapter.id, "pdf_filename": chapter.pdf_filename, "pages": pages, "words": words}
+
+
+@router.delete("/{chapter_id}/pdf")
+def remove_chapter_pdf(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
+    chapter = _own_recording_chapter(db, chapter_id, user)
+    chapter.pdf_filename = None
+    chapter.pdf_text = None
+    db.commit()
+    return {"id": chapter.id, "pdf_filename": None}
 
 
 @router.post("/{chapter_id}/finish", status_code=202)

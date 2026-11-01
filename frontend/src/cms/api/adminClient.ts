@@ -64,7 +64,8 @@ export interface CmsChapter {
   generated_text?: string;
   summary?: string;
   from_manuscript?: boolean;
-  generation_error?: string | null;  // last background write failure, while back in "recording"
+  generation_error?: string | null;
+  pdf_filename?: string | null;  // chapter PDF attached by the author, written in on the next Write  // last background write failure, while back in "recording"
   segment_count: number;
   created_at: string;
   finished_at: string | null;

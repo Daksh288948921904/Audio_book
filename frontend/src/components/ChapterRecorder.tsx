@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { uploadAudio, type Segment } from "../api/client";
+import { removeChapterPdf, uploadAudio, uploadChapterPdf, type Segment } from "../api/client";
 
 interface Props {
   chapterId: number;
   chapterLabel: string;
+  pdfFilename?: string | null;
   onAdded: (segment: Segment) => void;
+  onPdfChanged: (pdfFilename: string | null) => void;
 }
 
 type S = "idle" | "recording" | "uploading";
 
-// Record or upload audio straight into one chapter — no "which section?" step.
-export default function ChapterRecorder({ chapterId, chapterLabel, onAdded }: Props) {
+// Record or upload audio, or attach a written PDF, straight into one chapter — no "which section?" step.
+export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, onAdded, onPdfChanged }: Props) {
   const [state, setState] = useState<S>("idle");
   const [seconds, setSeconds] = useState(0);
   const [progress, setProgress] = useState<string | null>(null);
@@ -19,6 +21,8 @@ export default function ChapterRecorder({ chapterId, chapterLabel, onAdded }: Pr
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+  const [pdfInfo, setPdfInfo] = useState<string | null>(null);
 
   useEffect(() => {
     if (state !== "recording") return;
@@ -74,6 +78,38 @@ export default function ChapterRecorder({ chapterId, chapterLabel, onAdded }: Pr
     }
   }
 
+  async function handlePdf(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (pdfFilename && !window.confirm(`Replace "${pdfFilename}" with "${file.name}"?`)) return;
+    setState("uploading");
+    setProgress("Reading your PDF…");
+    setError(null);
+    try {
+      const r = await uploadChapterPdf(chapterId, file);
+      setPdfInfo(`${r.pages} page${r.pages !== 1 ? "s" : ""} · ${r.words.toLocaleString()} words`);
+      onPdfChanged(r.pdf_filename);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProgress(null);
+      setState("idle");
+    }
+  }
+
+  async function removePdf() {
+    if (!window.confirm(`Remove "${pdfFilename}" from ${chapterLabel}?`)) return;
+    setError(null);
+    try {
+      await removeChapterPdf(chapterId);
+      setPdfInfo(null);
+      onPdfChanged(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
@@ -86,7 +122,7 @@ export default function ChapterRecorder({ chapterId, chapterLabel, onAdded }: Pr
 
   return (
     <div className="ch-rec">
-      <div className="ch-rec-title">Add audio to {chapterLabel}</div>
+      <div className="ch-rec-title">Add to {chapterLabel}</div>
       <div className="ch-rec-row">
         <button
           className={`ch-rec-btn${isRec ? " recording" : ""}`}
@@ -99,7 +135,22 @@ export default function ChapterRecorder({ chapterId, chapterLabel, onAdded }: Pr
           ⬆ Upload audio
         </button>
         <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={handleFiles} />
+        <button className="ch-rec-upload" onClick={() => pdfRef.current?.click()} disabled={busy || isRec}
+          title="Already wrote this chapter? Attach it — it's polished and becomes the start of the chapter">
+          📄 {pdfFilename ? "Replace PDF" : "Upload PDF"}
+        </button>
+        <input ref={pdfRef} type="file" accept="application/pdf,.pdf" hidden onChange={handlePdf} />
       </div>
+      {pdfFilename && (
+        <div className="ch-rec-pdf">
+          <span className="ch-rec-pdf-name">📄 {pdfFilename}</span>
+          {pdfInfo && <span>· {pdfInfo}</span>}
+          <button className="ch-rec-pdf-remove" onClick={removePdf} disabled={busy || isRec} title="Remove PDF">×</button>
+          <span className="ch-rec-pdf-note">
+            Polished and placed at the start of this chapter when it's written; recordings continue after it.
+          </span>
+        </div>
+      )}
       {busy && (
         <div className="ch-rec-status">
           <span className="spinner" style={{ width: 12, height: 12 }} /> {progress}

@@ -342,9 +342,9 @@ export default function ChapterCard({
                 </div>
               )}
 
-              {!isGenerating && segments.length === 0 && chapter.status === "recording" && (
+              {!isGenerating && segments.length === 0 && !chapter.pdf_filename && chapter.status === "recording" && (
                 <div className="cc-empty-segs">
-                  No recordings yet — record or upload audio for this chapter below.
+                  Nothing added yet — record, upload audio, or attach a PDF of this chapter below.
                 </div>
               )}
 
@@ -352,7 +352,9 @@ export default function ChapterCard({
                 <ChapterRecorder
                   chapterId={chapter.id}
                   chapterLabel={chapter.title || `Chapter ${displayNum ?? chapter.number}`}
+                  pdfFilename={chapter.pdf_filename}
                   onAdded={(seg) => onSegmentAdded(chapter.id, seg)}
+                  onPdfChanged={(pdf_filename) => onChapterUpdated({ ...chapter, pdf_filename })}
                 />
               )}
 

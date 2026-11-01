@@ -57,6 +57,8 @@ class Chapter(Base):
     section_type   = Column(String, default="chapter")  # "front_matter" | "chapter" | "back_matter"
     generated_text = Column(Text, nullable=True)
     base_text      = Column(Text, nullable=True)  # enhanced manuscript text; audio prose is appended after it
+    pdf_filename   = Column(String, nullable=True)  # chapter PDF the author attached, not yet written in
+    pdf_text       = Column(Text, nullable=True)    # its raw text — polished into base_text on the next write
     summary        = Column(Text, nullable=True)
     status         = Column(String, default="recording")  # recording | generating | done
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -113,6 +115,10 @@ def _sqlite_migrate():
         if "base_text" not in cols:
             conn.execute(text("ALTER TABLE chapters ADD COLUMN base_text TEXT"))
             conn.commit()
+        for col, typ in (("pdf_filename", "VARCHAR"), ("pdf_text", "TEXT")):
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE chapters ADD COLUMN {col} {typ}"))
+                conn.commit()
         if "book_id" not in cols:
             conn.execute(text(
                 "ALTER TABLE chapters ADD COLUMN book_id INTEGER REFERENCES books(id) ON DELETE CASCADE"
@@ -177,6 +183,8 @@ def _postgres_migrate():
             "ALTER TABLE chapters ADD COLUMN IF NOT EXISTS section_type VARCHAR DEFAULT 'chapter'"
         ))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS base_text TEXT"))
+        conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_filename VARCHAR"))
+        conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_text TEXT"))
         for col, typ in _MANUSCRIPT_COLS:
             if typ == "TIMESTAMP":
                 typ = "TIMESTAMP WITH TIME ZONE"

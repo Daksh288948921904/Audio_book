@@ -44,6 +44,7 @@ export interface Chapter {
   generated_text?: string;
   summary?: string;
   from_manuscript?: boolean;
+  pdf_filename?: string | null;  // chapter PDF attached but not yet written in
 }
 
 export interface Segment {
@@ -207,6 +208,24 @@ export async function uploadAudio(chapterId: number, file: File): Promise<Segmen
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+export async function uploadChapterPdf(chapterId: number, file: File): Promise<{ pdf_filename: string; pages: number; words: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/chapters/${chapterId}/pdf`, { method: "POST", headers: authHeaders(), body: form });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return res.json();
+}
+
+export async function removeChapterPdf(chapterId: number): Promise<void> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/pdf`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+}
+
+async function errorDetail(res: Response): Promise<string> {
+  const body = await res.text();
+  try { return JSON.parse(body).detail ?? body; } catch { return body; }
 }
 
 export async function getSegments(chapterId: number): Promise<Segment[]> {
