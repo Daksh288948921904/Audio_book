@@ -18,8 +18,17 @@ if not GROQ_API_KEYS:
         GROQ_API_KEYS = [_single]
 
 GROQ_STT_MODEL    = os.getenv("GROQ_STT_MODEL",    "whisper-large-v3-turbo")
-GROQ_INTENT_MODEL = os.getenv("GROQ_INTENT_MODEL", "llama-3.1-8b-instant")
-GROQ_LLM_MODEL    = os.getenv("GROQ_LLM_MODEL",    "llama-3.3-70b-versatile")
+GROQ_INTENT_MODEL = os.getenv("GROQ_INTENT_MODEL", "openai/gpt-oss-20b")
+GROQ_LLM_MODEL    = os.getenv("GROQ_LLM_MODEL",    "openai/gpt-oss-120b")
+
+# Groq retired the Llama models (404 model_not_found). Deploy settings may still
+# name them, so swap in the replacements whatever the environment says.
+_RETIRED_MODELS = {
+    "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+    "llama-3.1-8b-instant":    "openai/gpt-oss-20b",
+}
+GROQ_INTENT_MODEL = _RETIRED_MODELS.get(GROQ_INTENT_MODEL, GROQ_INTENT_MODEL)
+GROQ_LLM_MODEL    = _RETIRED_MODELS.get(GROQ_LLM_MODEL, GROQ_LLM_MODEL)
 
 # --- Vector DB (Qdrant Cloud or local) ---
 QDRANT_URL     = os.getenv("QDRANT_URL",     "http://localhost:6333")

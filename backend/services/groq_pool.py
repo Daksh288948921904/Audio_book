@@ -31,6 +31,11 @@ class GroqPool:
             logger.warning("Groq key #%d rate-limited — rotating to key #%d", old + 1, self._index + 1)
 
     def chat(self, **kwargs):
+        if kwargs.get("model", "").startswith("openai/gpt-oss"):
+            # gpt-oss reasons before answering, and those tokens come out of max_tokens.
+            # Keep it short and leave the reasoning out of the reply.
+            kwargs.setdefault("reasoning_effort", "low")
+            kwargs.setdefault("include_reasoning", False)
         for _ in range(len(self._keys)):
             try:
                 return self._current().chat.completions.create(**kwargs)

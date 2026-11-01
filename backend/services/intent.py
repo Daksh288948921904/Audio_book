@@ -38,8 +38,9 @@ def classify_intent(text: str) -> str:
             },
             {"role": "user", "content": text[:_MAX_CHARS]},
         ],
-        max_tokens=5,
+        max_tokens=300,  # room for the model's (short) reasoning before the one-word answer
         temperature=0,
     )
-    label = result.choices[0].message.content.strip().lower()
+    words = (result.choices[0].message.content or "").strip().lower().split()
+    label = words[0].strip(".,!\"'") if words else ""
     return label if label in CANDIDATE_LABELS else "informational"

@@ -490,6 +490,8 @@ export default function App() {
               text={viewingChapter.generated_text}
               summary={viewingChapter.summary ?? ""}
               fromManuscript={viewingChapter.from_manuscript}
+              publishedAt={viewingChapter.published_at}
+              bookTitle={activeBook?.title}
               onClose={() => setViewingChapter(null)}
               onReopen={async () => {
                 const { reopenChapter } = await import("./api/client");

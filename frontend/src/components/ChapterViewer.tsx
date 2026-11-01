@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { downloadChapterPdf, updateChapterText } from "../api/client";
+import ShareToAI from "./ShareToAI";
 
 interface Props {
   chapterId: number;
@@ -10,6 +11,8 @@ interface Props {
   onReopen: () => void;
   onClose?: () => void;
   fromManuscript?: boolean;
+  publishedAt?: string | null;  // sent by the CMS — enables Share to AI
+  bookTitle?: string;
 }
 
 // ── Clean text for TTS ────────────────────────────────────────────────────────
@@ -133,7 +136,9 @@ function VoicePlayer({ text }: { text: string }) {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function ChapterViewer({
   chapterId, chapterNumber, title, text: initialText, summary, onReopen, onClose, fromManuscript,
+  publishedAt, bookTitle,
 }: Props) {
+  const [sharing, setSharing] = useState(false);
   const [editing,     setEditing]     = useState(false);
   const [text,        setText]        = useState(initialText);
   const [draft,       setDraft]       = useState(initialText);
@@ -205,6 +210,15 @@ export default function ChapterViewer({
               <button className="btn-edit" onClick={startEdit}>✏ Edit</button>
               <button className="btn-pdf" onClick={downloadPdf}>↓ PDF</button>
               <button
+                className="btn-share"
+                onClick={() => setSharing(true)}
+                disabled={!publishedAt}
+                title={publishedAt ? "Share this chapter with ChatGPT, Claude or Gemini"
+                  : "Available once our editors send you this chapter"}
+              >
+                🤖 Share to AI
+              </button>
+              <button
                 className={`btn-listen-toggle${showPlayer ? " active" : ""}`}
                 onClick={() => setShowPlayer((v) => !v)}
               >
@@ -218,6 +232,10 @@ export default function ChapterViewer({
           )}
         </div>
       </div>
+
+      {sharing && (
+        <ShareToAI chapterId={chapterId} label={heading} bookTitle={bookTitle ?? "my book"} onClose={() => setSharing(false)} />
+      )}
 
       {showPlayer && !editing && (
         <div className="vp-bar">

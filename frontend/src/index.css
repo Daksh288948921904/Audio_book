@@ -887,6 +887,9 @@ html, body, #root {
 .cc-delete { background: none; color: var(--text-3); border: 1px solid var(--border); margin-left: auto; }
 .cc-gen:hover, .cc-view:hover, .cc-pdf:hover, .cc-reopen:hover, .cc-rename:hover { opacity: 0.82; transform: translateY(-1px); }
 .cc-delete:hover { color: var(--rose); border-color: rgba(248,113,113,0.3); }
+.cc-actions-top { margin-bottom: 16px; align-items: center; }
+.cc-actions-top button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.cc-share-hint { flex-basis: 100%; font-size: 11.5px; color: var(--text-2); }
 
 /* Published chapters + Share to AI */
 .pub-section {
@@ -2171,7 +2174,7 @@ html, body, #root {
   gap: 8px;
   flex-wrap: wrap;
 }
-.btn-back, .btn-edit, .btn-pdf, .btn-reopen, .btn-cancel, .btn-save {
+.btn-back, .btn-edit, .btn-pdf, .btn-share, .btn-reopen, .btn-cancel, .btn-save {
   padding: 7px 14px;
   border-radius: var(--r);
   font-size: 12.5px;
@@ -2198,6 +2201,13 @@ html, body, #root {
   color: var(--amber-2);
 }
 .btn-pdf:hover { opacity: 0.82; }
+.btn-share {
+  background: var(--blue-dim);
+  border: 1px solid rgba(91,141,239,0.25);
+  color: var(--blue-2);
+}
+.btn-share:hover:not(:disabled) { opacity: 0.82; }
+.btn-share:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-reopen {
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--border-2);

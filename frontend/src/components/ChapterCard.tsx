@@ -321,6 +321,25 @@ export default function ChapterCard({
                 </div>
               )}
 
+              {chapter.status === "done" && !isGenerating && (
+                <div className="cc-actions cc-actions-top">
+                  <button className="cc-view" onClick={openAndView}>View Manuscript</button>
+                  <button className="cc-pdf" onClick={downloadPdf}>↓ PDF</button>
+                  <button
+                    className="cc-view"
+                    onClick={() => setSharing(true)}
+                    disabled={!chapter.published_at}
+                    title={chapter.published_at ? "Share this chapter with ChatGPT, Claude or Gemini"
+                      : "Available once our editors send you this chapter"}
+                  >
+                    🤖 Share to AI
+                  </button>
+                  {!chapter.published_at && (
+                    <div className="cc-share-hint">Share to AI unlocks once our editors send you this chapter.</div>
+                  )}
+                </div>
+              )}
+
               {!isGenerating && localSegs.length > 0 && (
                 <div className="cc-segs-list">
                   <div className="cc-segs-label">
@@ -431,16 +450,9 @@ export default function ChapterCard({
               {!isGenerating && (
                 <div className="cc-actions">
                   {chapter.status === "done" && (
-                    <>
-                      <button className="cc-view" onClick={openAndView}>View Manuscript</button>
-                      <button className="cc-pdf" onClick={downloadPdf}>↓ PDF</button>
-                      {chapter.published_at && (
-                        <button className="cc-view" onClick={() => setSharing(true)}>🤖 Share to AI</button>
-                      )}
-                      <button className="cc-reopen" onClick={handleReopen}>
-                        {chapter.from_manuscript ? "🎙 Add Audio" : "← Re-record"}
-                      </button>
-                    </>
+                    <button className="cc-reopen" onClick={handleReopen}>
+                      {chapter.from_manuscript ? "🎙 Add Audio" : "← Re-record"}
+                    </button>
                   )}
                   {chapter.status === "recording" && chapter.section_type === "chapter" && (
                     <button className="cc-rename" onClick={startEdit}>✏ Rename</button>

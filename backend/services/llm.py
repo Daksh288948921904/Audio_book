@@ -17,11 +17,12 @@ _NOTES_BUDGET = 5000
 # Most recent chapters win when a long book doesn't fit.
 _CONTEXT_BUDGET = 4000
 
-# Tokens to generate per batch. ~2 000 ≈ 2–3 pages of prose.
-_BATCH_OUTPUT_TOKENS = 2000
+# Tokens to generate per batch (~2–3 pages of prose), including the model's short
+# reasoning. Input + this stays under gpt-oss-120b's 8 000 TPM per key.
+_BATCH_OUTPUT_TOKENS = 2500
 
-# Seconds to wait between batches so successive calls don't exceed 12 000 TPM.
-# At ~5 000 tokens per call that's ~2 calls/min including the call itself.
+# Seconds to wait between batches to spread load over Groq's per-key TPM (8 000 on
+# gpt-oss-120b). A call is ~5 000 tokens; the pool rotates keys when one is rate-limited.
 _BATCH_DELAY = 20
 
 # Chapter text per summary call when a chapter is too long to summarise in one go.
@@ -41,7 +42,11 @@ def _chat(prompt: str, max_tokens: int = 4096) -> str:
                 max_tokens=max_tokens,
                 temperature=0.7,
             )
-            return result.choices[0].message.content.strip()
+            content = (result.choices[0].message.content or "").strip()
+            if not content:
+                # A reasoning model can spend its whole token budget thinking; try again.
+                raise RuntimeError("empty response from the model")
+            return content
         except (RuntimeError, APIConnectionError, APITimeoutError) as exc:
             if wait is None:
                 raise
@@ -203,7 +208,7 @@ def summarize_chapter(chapter_text: str, chapter_number: int) -> str:
 Chapter text:
 {chapter_text}
 
-Summary:""", max_tokens=300)
+Summary:""", max_tokens=700)
 
     # Long chapter: summarise each part, then merge — so the summary covers the whole
     # chapter, not just its opening pages.
@@ -214,7 +219,7 @@ Summary:""", max_tokens=300)
 Text:
 {piece}
 
-Summary:""", max_tokens=200))
+Summary:""", max_tokens=500))
         time.sleep(_BATCH_DELAY // 2)
 
     joined = "\n".join(f"Part {i + 1}: {n}" for i, n in enumerate(part_notes))
@@ -224,7 +229,7 @@ Summary:""", max_tokens=200))
 
 Combine them into one summary of the whole chapter in 4-6 sentences. {_SUMMARY_RULES}
 
-Summary:""", max_tokens=350)
+Summary:""", max_tokens=800)
 
 
 def enhance_passage(passage: str, prev_tail: str = "", genre: str = "fiction") -> str:
