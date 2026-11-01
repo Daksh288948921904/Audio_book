@@ -223,6 +223,25 @@ export async function removeChapterPdf(chapterId: number): Promise<void> {
   if (!res.ok) throw new Error(await errorDetail(res));
 }
 
+// The pdf_filename of a chapter whose text was typed in, not attached (backend/routers/chapters.py).
+export const WRITTEN_FILENAME = "Written in the app";
+
+export async function getWrittenText(chapterId: number): Promise<string> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/written`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return (await res.json()).text;
+}
+
+export async function saveWrittenText(chapterId: number, text: string): Promise<string | null> {
+  const res = await fetch(`${BASE}/chapters/${chapterId}/written`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return (await res.json()).pdf_filename;
+}
+
 async function errorDetail(res: Response): Promise<string> {
   const body = await res.text();
   try { return JSON.parse(body).detail ?? body; } catch { return body; }

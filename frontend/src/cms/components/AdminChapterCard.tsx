@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { cmsFinishChapter, cmsDownloadPdf, cmsSendChapterEmail, type CmsChapter, type CmsSegment } from "../api/adminClient";
+import { WRITTEN_FILENAME } from "../../api/client";
 
 const SECTION_ICONS: Record<string, string> = {
   "Dedication": "💌", "Epigraph": "💬", "Foreword": "✍", "Preface": "📝",
@@ -151,7 +152,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
         <div className="adm-title">{chapter.title || `Chapter ${displayNumber}`}</div>
         <div className="adm-segs">
           {chapter.from_manuscript && "📄 From manuscript · "}
-          {chapter.pdf_filename && `📄 PDF: ${chapter.pdf_filename} · `}
+          {chapter.pdf_filename && (chapter.pdf_filename === WRITTEN_FILENAME ? "✍ Written text · " : `📄 PDF: ${chapter.pdf_filename} · `)}
           {segments.length} recording{segments.length !== 1 ? "s" : ""}
         </div>
 

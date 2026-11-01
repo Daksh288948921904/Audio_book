@@ -344,7 +344,7 @@ export default function ChapterCard({
 
               {!isGenerating && segments.length === 0 && !chapter.pdf_filename && chapter.status === "recording" && (
                 <div className="cc-empty-segs">
-                  Nothing added yet — record, upload audio, or attach a PDF of this chapter below.
+                  Nothing added yet — record, upload audio, attach a PDF, or write this chapter below.
                 </div>
               )}
 

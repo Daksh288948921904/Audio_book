@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { removeChapterPdf, uploadAudio, uploadChapterPdf, type Segment } from "../api/client";
+import { removeChapterPdf, uploadAudio, uploadChapterPdf, WRITTEN_FILENAME, type Segment } from "../api/client";
+import ChapterWriter from "./ChapterWriter";
 
 interface Props {
   chapterId: number;
@@ -11,7 +12,7 @@ interface Props {
 
 type S = "idle" | "recording" | "uploading";
 
-// Record or upload audio, or attach a written PDF, straight into one chapter — no "which section?" step.
+// Record or upload audio, attach a written PDF, or type the chapter, straight into one chapter — no "which section?" step.
 export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, onAdded, onPdfChanged }: Props) {
   const [state, setState] = useState<S>("idle");
   const [seconds, setSeconds] = useState(0);
@@ -82,7 +83,8 @@ export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, 
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (pdfFilename && !window.confirm(`Replace "${pdfFilename}" with "${file.name}"?`)) return;
+    const replacing = pdfFilename === WRITTEN_FILENAME ? "the text you wrote" : pdfFilename && `"${pdfFilename}"`;
+    if (replacing && !window.confirm(`Replace ${replacing} with "${file.name}"?`)) return;
     setState("uploading");
     setProgress("Reading your PDF…");
     setError(null);
@@ -119,6 +121,7 @@ export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, 
   const isRec = state === "recording";
   const busy = state === "uploading";
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const attachedPdf = pdfFilename && pdfFilename !== WRITTEN_FILENAME ? pdfFilename : null;
 
   return (
     <div className="ch-rec">
@@ -137,13 +140,14 @@ export default function ChapterRecorder({ chapterId, chapterLabel, pdfFilename, 
         <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={handleFiles} />
         <button className="ch-rec-upload" onClick={() => pdfRef.current?.click()} disabled={busy || isRec}
           title="Already wrote this chapter? Attach it — it's polished and becomes the start of the chapter">
-          📄 {pdfFilename ? "Replace PDF" : "Upload PDF"}
+          📄 {attachedPdf ? "Replace PDF" : "Upload PDF"}
         </button>
         <input ref={pdfRef} type="file" accept="application/pdf,.pdf" hidden onChange={handlePdf} />
       </div>
-      {pdfFilename && (
+      {!attachedPdf && <ChapterWriter chapterId={chapterId} hasText={!!pdfFilename} onSaved={onPdfChanged} />}
+      {attachedPdf && (
         <div className="ch-rec-pdf">
-          <span className="ch-rec-pdf-name">📄 {pdfFilename}</span>
+          <span className="ch-rec-pdf-name">📄 {attachedPdf}</span>
           {pdfInfo && <span>· {pdfInfo}</span>}
           <button className="ch-rec-pdf-remove" onClick={removePdf} disabled={busy || isRec} title="Remove PDF">×</button>
           <span className="ch-rec-pdf-note">
