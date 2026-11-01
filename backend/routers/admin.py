@@ -2,6 +2,7 @@ import io
 import os
 import re
 import wave
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
@@ -229,6 +230,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "pdf_filename":  c.pdf_filename if c.pdf_text else None,
             "has_written":   bool(c.written_text),
             "has_text":      has_own_text(c),
+            "published_at":  c.published_at,
             "parts":         part_rows(c),
             "generation_error": pipeline.last_error(c.id) if c.status == "recording" else None,
             "segment_count": db.query(AudioSegment).filter(AudioSegment.chapter_id == c.id).count(),
@@ -256,6 +258,7 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin
         "pdf_filename": chapter.pdf_filename if chapter.pdf_text else None,
         "has_written": bool(chapter.written_text),
         "has_text": has_own_text(chapter),
+        "published_at": chapter.published_at,
         "parts": part_rows(chapter),
         "generation_error": pipeline.last_error(chapter.id) if chapter.status == "recording" else None,
         "created_at":    chapter.created_at,
@@ -361,7 +364,10 @@ def send_chapter_email(chapter_id: int, db: Session = Depends(get_db), _: dict =
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email failed: {e}")
-    return {"status": "sent", "to": user.email}
+    # The author now has this version — it shows in their Published section.
+    chapter.published_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"status": "sent", "to": user.email, "published_at": chapter.published_at}
 
 
 @router.patch("/chapters/{chapter_id}/text")

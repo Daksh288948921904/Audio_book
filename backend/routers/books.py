@@ -37,6 +37,7 @@ def _chapter_row(c: Chapter) -> dict:
         "pdf_filename": c.pdf_filename if c.pdf_text else None,
         "has_written": bool(c.written_text),
         "parts": part_rows(c),
+        "published_at": c.published_at,
         "created_at": c.created_at,
         "finished_at": c.finished_at,
     }

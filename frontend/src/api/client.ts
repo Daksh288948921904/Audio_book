@@ -47,6 +47,7 @@ export interface Chapter {
   pdf_filename?: string | null;  // chapter PDF attached but not yet written in
   has_written?: boolean;         // text typed in the app, not yet written in (goes after the PDF)
   parts?: ChapterPart[];         // "+ Add more" parts 2, 3, … — part 1 is the chapter's own fields
+  published_at?: string | null;  // when the CMS sent this chapter to the author
 }
 
 export interface ChapterPart {
@@ -310,6 +311,26 @@ export async function fetchAudioBlob(segmentId: number): Promise<string | null> 
 
 export function pdfUrl(chapterId: number): string {
   return `${BASE}/chapters/${chapterId}/pdf`;
+}
+
+// The PDF endpoint needs the login token, which a plain <a href> can't send.
+export async function fetchChapterPdf(chapterId: number): Promise<Blob> {
+  const res = await fetch(pdfUrl(chapterId), { headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return res.blob();
+}
+
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+export async function downloadChapterPdf(chapterId: number, filename: string): Promise<void> {
+  saveBlob(await fetchChapterPdf(chapterId), filename);
 }
 
 export async function fetchChapterSpeech(chapterId: number): Promise<string | null> {

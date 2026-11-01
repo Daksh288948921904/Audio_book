@@ -85,6 +85,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     try {
       const r = await cmsSendChapterEmail(chapter.id);
       setEmailSent(r.to);
+      onUpdated({ ...chapter, published_at: r.published_at });
     } catch (e) { setError(String(e)); }
     finally { setEmailing(false); }
   }
@@ -156,6 +157,9 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
           {(chapter.parts?.length ?? 0) > 0 && `${(chapter.parts?.length ?? 0) + 1} parts · `}
           {segments.length} recording{segments.length !== 1 ? "s" : ""}
         </div>
+        {chapter.status === "done" && chapter.published_at && (
+          <div className="adm-published">✓ Published · {new Date(chapter.published_at).toLocaleDateString()}</div>
+        )}
 
         {chapter.status === "done" && chapter.generated_text && (
           <div className="adm-excerpt">

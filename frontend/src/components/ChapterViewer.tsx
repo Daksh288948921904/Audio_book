@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { pdfUrl, updateChapterText } from "../api/client";
+import { downloadChapterPdf, updateChapterText } from "../api/client";
 
 interface Props {
   chapterId: number;
@@ -176,10 +176,7 @@ export default function ChapterViewer({
   }
 
   function downloadPdf() {
-    const a = document.createElement("a");
-    a.href = pdfUrl(chapterId);
-    a.download = `chapter_${chapterNumber}.pdf`;
-    a.click();
+    downloadChapterPdf(chapterId, `chapter_${chapterNumber}.pdf`).catch((e) => setSaveError(String(e)));
   }
 
   const heading    = title ? `Chapter ${chapterNumber}: ${title}` : `Chapter ${chapterNumber}`;

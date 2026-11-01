@@ -9,6 +9,7 @@ import RecordZone from "./components/RecordZone";
 import AssignModal from "./components/AssignModal";
 import ChapterCard from "./components/ChapterCard";
 import ChapterViewer from "./components/ChapterViewer";
+import PublishedSection from "./components/PublishedSection";
 import WelcomeScreen from "./components/WelcomeScreen";
 import ManuscriptButton from "./components/ManuscriptButton";
 
@@ -271,6 +272,12 @@ export default function App() {
   const numberedIds = mainChapters
     .filter((c) => c.title !== "Prologue" && c.title !== "Epilogue")
     .map((c) => c.id);
+  function chapterLabel(ch: Chapter): string {
+    const n = displayNum(ch);
+    if (n == null) return ch.title ?? `Section ${ch.number}`;
+    return ch.title ? `Chapter ${n}: ${ch.title}` : `Chapter ${n}`;
+  }
+
   function displayNum(ch: { id: number; section_type: string; title: string | null }): number | null {
     if (ch.section_type !== "chapter") return null;
     if (ch.title === "Prologue" || ch.title === "Epilogue") return null;
@@ -384,6 +391,12 @@ export default function App() {
               onUploaded={(patch) => setBooks((prev) => prev.map((b) => b.id === activeBook.id ? { ...b, ...patch } : b))}
             />
 
+            <PublishedSection
+              chapters={chapters.filter((c) => c.published_at && c.status === "done")}
+              labelFor={chapterLabel}
+              bookTitle={activeBook.title}
+            />
+
             <div className="book-content">
               <RecordZone onRecorded={handleRecorded} />
 
@@ -400,7 +413,8 @@ export default function App() {
                           allChapters={chapters} index={i} displayNum={displayNum(ch)}
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                           onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
-                          onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded} />
+                          onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded}
+                          bookTitle={activeBook.title} />
                       ))}
                     </div>
                   </>
@@ -417,7 +431,8 @@ export default function App() {
                       allChapters={chapters} index={i} displayNum={displayNum(ch)}
                       onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                       onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
-                      onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded} />
+                      onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded}
+                          bookTitle={activeBook.title} />
                   ))}
                 </div>
 
@@ -433,7 +448,8 @@ export default function App() {
                           allChapters={chapters} index={i} displayNum={displayNum(ch)}
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                           onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
-                          onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded} />
+                          onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded}
+                          bookTitle={activeBook.title} />
                       ))}
                     </div>
                   </>
@@ -478,7 +494,7 @@ export default function App() {
               onReopen={async () => {
                 const { reopenChapter } = await import("./api/client");
                 await reopenChapter(viewingChapter.id);
-                handleChapterUpdated({ ...viewingChapter, status: "recording", generated_text: undefined, summary: undefined });
+                handleChapterUpdated({ ...viewingChapter, status: "recording", generated_text: undefined, summary: undefined, published_at: null });
                 setViewingChapter(null);
               }}
             />

@@ -70,6 +70,7 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
         "pdf_filename": chapter.pdf_filename if chapter.pdf_text else None,
         "has_written": bool(chapter.written_text),
         "parts": part_rows(chapter),
+        "published_at": chapter.published_at,
         "created_at": chapter.created_at,
         "finished_at": chapter.finished_at,
     }
@@ -229,15 +230,19 @@ def finish(chapter_id: int, db: Session = Depends(get_db), _: dict = Depends(req
 
 
 @router.get("/{chapter_id}/pdf")
-def download_pdf(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth):
+def download_pdf(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
+    book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
+    if book and book.user_id != user["sub"] and not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Not your book")
     if chapter.status != "done" or not chapter.generated_text:
         raise HTTPException(status_code=400, detail="Chapter not yet generated")
     from backend.services.pdf import generate_pdf
-    pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text)
-    filename = f"chapter_{chapter.number}.pdf"
+    disp_num = pipeline._display_number(chapter, db)
+    pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text, display_number=disp_num)
+    filename = f"chapter_{disp_num or chapter.number}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -281,6 +286,7 @@ def reopen_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _au
         raise HTTPException(status_code=404, detail="Chapter not found")
     chapter.status = "recording"
     chapter.finished_at = None
+    chapter.published_at = None  # the text will change; the CMS sends the new version again
     db.commit()
     return {"id": chapter.id, "status": chapter.status}
 

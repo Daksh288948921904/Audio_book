@@ -3,11 +3,12 @@ import {
   deleteChapter, reopenChapter,
   updateChapterTitle, deleteSegment,
   reorderSegments, moveSegment,
-  pdfUrl, getChapter, addChapterPart, removeChapterPart,
+  downloadChapterPdf, getChapter, addChapterPart, removeChapterPart,
   type Chapter, type ChapterPart, type Segment,
 } from "../api/client";
 import SegmentCard from "./SegmentCard";
 import ChapterRecorder from "./ChapterRecorder";
+import ShareToAI from "./ShareToAI";
 
 const GRADIENTS = [
   "linear-gradient(145deg, #0f1f3d 0%, #1a3a6b 55%, #2a4f8f 100%)",
@@ -38,11 +39,12 @@ interface Props {
   onSegmentMoved: (segId: number, fromChapterId: number, toChapterId: number) => void;
   onViewManuscript: (ch: Chapter) => void;
   onSegmentAdded: (chapterId: number, segment: Segment) => void;
+  bookTitle?: string;
 }
 
 export default function ChapterCard({
   chapter, segments, allChapters, index, displayNum,
-  onChapterUpdated, onChapterDeleted, onSegmentDeleted, onSegmentMoved, onViewManuscript, onSegmentAdded,
+  onChapterUpdated, onChapterDeleted, onSegmentDeleted, onSegmentMoved, onViewManuscript, onSegmentAdded, bookTitle,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(false);
@@ -142,7 +144,7 @@ export default function ChapterCard({
   async function handleReopen() {
     try {
       await reopenChapter(chapter.id);
-      onChapterUpdated({ ...chapter, status: "recording", generated_text: undefined, summary: undefined });
+      onChapterUpdated({ ...chapter, status: "recording", generated_text: undefined, summary: undefined, published_at: null });
     } catch (e) { setError(String(e)); }
   }
 
@@ -165,6 +167,7 @@ export default function ChapterCard({
   const parts = chapter.parts ?? [];
   const chapterLabel = chapter.title || `Chapter ${displayNum ?? chapter.number}`;
   const [addingPart, setAddingPart] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   function updatePart(partId: number, patch: Partial<ChapterPart>) {
     onChapterUpdated({ ...chapter, parts: parts.map((p) => p.id === partId ? { ...p, ...patch } : p) });
@@ -199,10 +202,7 @@ export default function ChapterCard({
 
   function downloadPdf(e: React.MouseEvent) {
     e.stopPropagation();
-    const a = document.createElement("a");
-    a.href = pdfUrl(chapter.id);
-    a.download = `chapter_${displayNum ?? chapter.number}.pdf`;
-    a.click();
+    downloadChapterPdf(chapter.id, `chapter_${displayNum ?? chapter.number}.pdf`).catch((err) => setError(String(err)));
   }
 
   async function openAndView() {
@@ -246,6 +246,17 @@ export default function ChapterCard({
           </div>
         </div>
       </div>
+
+      {sharing && (
+        <ShareToAI
+          chapterId={chapter.id}
+          label={chapter.section_type === "chapter" && displayNum != null
+            ? (chapter.title ? `Chapter ${displayNum}: ${chapter.title}` : `Chapter ${displayNum}`)
+            : (chapter.title ?? `Section ${chapter.number}`)}
+          bookTitle={bookTitle ?? "my book"}
+          onClose={() => setSharing(false)}
+        />
+      )}
 
       {/* ── Detail modal ── */}
       {open && (
@@ -423,6 +434,9 @@ export default function ChapterCard({
                     <>
                       <button className="cc-view" onClick={openAndView}>View Manuscript</button>
                       <button className="cc-pdf" onClick={downloadPdf}>↓ PDF</button>
+                      {chapter.published_at && (
+                        <button className="cc-view" onClick={() => setSharing(true)}>🤖 Share to AI</button>
+                      )}
                       <button className="cc-reopen" onClick={handleReopen}>
                         {chapter.from_manuscript ? "🎙 Add Audio" : "← Re-record"}
                       </button>

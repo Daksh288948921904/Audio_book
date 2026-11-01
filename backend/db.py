@@ -64,6 +64,7 @@ class Chapter(Base):
     status         = Column(String, default="recording")  # recording | generating | done
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     finished_at    = Column(DateTime, nullable=True)
+    published_at   = Column(DateTime, nullable=True)  # CMS sent this version to the author; cleared on reopen
 
     book     = relationship("Book", back_populates="chapters")
     segments = relationship("AudioSegment", back_populates="chapter", cascade="all, delete-orphan")
@@ -143,7 +144,8 @@ def _sqlite_migrate():
         if "base_text" not in cols:
             conn.execute(text("ALTER TABLE chapters ADD COLUMN base_text TEXT"))
             conn.commit()
-        for col, typ in (("pdf_filename", "VARCHAR"), ("pdf_text", "TEXT"), ("written_text", "TEXT")):
+        for col, typ in (("pdf_filename", "VARCHAR"), ("pdf_text", "TEXT"), ("written_text", "TEXT"),
+                         ("published_at", "TIMESTAMP")):
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE chapters ADD COLUMN {col} {typ}"))
                 conn.commit()
@@ -221,6 +223,7 @@ def _postgres_migrate():
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_filename VARCHAR"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_text TEXT"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS written_text TEXT"))
+        conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS published_at TIMESTAMP WITH TIME ZONE"))
         conn.execute(text(
             "ALTER TABLE audio_segments ADD COLUMN IF NOT EXISTS part_id INTEGER "
             "REFERENCES chapter_parts(id) ON DELETE CASCADE"

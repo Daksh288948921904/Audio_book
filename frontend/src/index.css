@@ -888,6 +888,67 @@ html, body, #root {
 .cc-gen:hover, .cc-view:hover, .cc-pdf:hover, .cc-reopen:hover, .cc-rename:hover { opacity: 0.82; transform: translateY(-1px); }
 .cc-delete:hover { color: var(--rose); border-color: rgba(248,113,113,0.3); }
 
+/* Published chapters + Share to AI */
+.pub-section {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-b);
+  background: var(--blue-dim);
+  border-radius: var(--r);
+}
+.pub-head { margin-bottom: 10px; }
+.pub-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.pub-sub { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.pub-list { display: flex; flex-direction: column; gap: 6px; }
+.pub-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r);
+}
+.pub-row-text { flex: 1; min-width: 0; }
+.pub-row-title { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pub-row-date { font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
+
+.share-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.share-box {
+  width: 100%; max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border-3);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.share-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.share-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.share-sub { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.share-close { background: none; border: none; color: var(--text-2); font-size: 20px; cursor: pointer; line-height: 1; }
+.share-close:hover { color: var(--text); }
+.share-primary {
+  padding: 11px 16px;
+  border: none;
+  border-radius: var(--r);
+  background: linear-gradient(135deg, var(--blue) 0%, var(--violet) 100%);
+  color: #fff;
+  font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.share-label { font-size: 11.5px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.4px; }
+.share-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.share-row .ch-rec-upload { flex: 1; }
+.share-row-minor { justify-content: center; gap: 18px; }
+.share-link { background: none; border: none; color: var(--blue-2); font: inherit; font-size: 12.5px; cursor: pointer; }
+.share-link:hover { text-decoration: underline; }
+.share-note { font-size: 12px; color: var(--green); line-height: 1.5; }
+
 /* Per-chapter record / upload */
 .ch-rec {
   border: 1px solid var(--border-b);

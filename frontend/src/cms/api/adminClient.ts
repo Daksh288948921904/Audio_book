@@ -67,7 +67,8 @@ export interface CmsChapter {
   generation_error?: string | null;  // last background write failure, while back in "recording"
   pdf_filename?: string | null;      // chapter PDF attached by the author, written in on the next Write
   has_written?: boolean;             // text the author typed in the app, written in after the PDF
-  has_text?: boolean;                // any PDF or typed text in any part — enough to write the chapter
+  has_text?: boolean;
+  published_at?: string | null;      // sent to the author (📧 Send); shows in their Published section                // any PDF or typed text in any part — enough to write the chapter
   parts?: { id: number; position: number; pdf_filename: string | null; has_written: boolean }[];
   segment_count: number;
   created_at: string;
@@ -164,7 +165,7 @@ export async function cmsFetchAudioBlob(segmentId: number): Promise<string | nul
   }
 }
 
-export async function cmsSendChapterEmail(chapterId: number): Promise<{ status: string; to: string }> {
+export async function cmsSendChapterEmail(chapterId: number): Promise<{ status: string; to: string; published_at: string }> {
   return (await apiFetch(`/admin/chapters/${chapterId}/send-email`, { method: "POST" })).json();
 }
 

@@ -71,6 +71,7 @@ function ManuscriptPanel({
     try {
       const res = await cmsSendChapterEmail(chapter.id);
       setSentTo(res.to);
+      onChapterUpdated({ ...chapter, published_at: res.published_at });
     } catch (e) { setSaveErr(String(e)); }
     finally { setSending(false); }
   }
