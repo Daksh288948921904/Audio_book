@@ -12,6 +12,7 @@ import ChapterViewer from "./components/ChapterViewer";
 import PublishedSection from "./components/PublishedSection";
 import WelcomeScreen from "./components/WelcomeScreen";
 import ManuscriptButton from "./components/ManuscriptButton";
+import "./dashboard-theme.css";
 
 interface PendingRec { blob: Blob; filename: string; }
 interface AuthUser { email: string; name: string; }
@@ -356,7 +357,7 @@ export default function App() {
         {!activeBook ? (
           <div className="welcome">
             <div className="welcome-orb">✍</div>
-            <h1>Start your first book</h1>
+            <h1>Start your <em className="dash-accent">first book.</em></h1>
             <p>Record your voice, assign segments to chapters, and watch them become a finished manuscript.
               Already written it? Upload your manuscript PDF when you create the book.</p>
             <button className="btn-create-first" onClick={() => setShowNewBook(true)}>
