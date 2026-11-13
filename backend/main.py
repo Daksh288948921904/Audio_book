@@ -131,7 +131,8 @@ if _FRONTEND_DIST.exists():
 
     _dist_root = _FRONTEND_DIST.resolve()
 
-    @app.get("/{full_path:path}", include_in_schema=False)
+    # HEAD too: link-preview crawlers (WhatsApp, Slack, etc.) often probe with HEAD first.
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     async def spa_fallback(full_path: str):
         # Real files at the top of the build (favicon, touch icon) are served as-is;
         # everything else is a client-side route.
