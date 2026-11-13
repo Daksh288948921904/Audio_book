@@ -6,6 +6,9 @@ import {
   type CmsChapter, type CmsBook, type CmsUser, type CmsSegment, type CompileResult, type CmsManuscript,
 } from "../api/adminClient";
 import AdminChapterCard from "../components/AdminChapterCard";
+import { motion } from "motion/react";
+import { AnimatedNumber } from "../../components/landing/primitives";
+import ProgressRing from "../../components/ui/ProgressRing";
 
 interface Props {
   user: CmsUser;
@@ -630,16 +633,25 @@ export default function BookDashboard({ user, book }: Props) {
 
       {/* Stats */}
       <div className="cms-stats">
+        <div className="cms-stat cms-stat-ring">
+          <ProgressRing value={chapters.length ? doneCount / chapters.length : 0} size={58} stroke={6}>
+            <span className="cms-book-pct">{chapters.length ? Math.round((doneCount / chapters.length) * 100) : 0}%</span>
+          </ProgressRing>
+          <div>
+            <div className="s-val">Progress</div>
+            <div className="s-lbl">{doneCount} of {chapters.length} written</div>
+          </div>
+        </div>
         <div className="cms-stat">
-          <div className="s-val" style={{ color: "var(--blue)" }}>{chapters.length}</div>
+          <div className="s-val cms-ember-num"><AnimatedNumber value={chapters.length} /></div>
           <div className="s-lbl">Chapters</div>
         </div>
         <div className="cms-stat">
-          <div className="s-val" style={{ color: "var(--amber)" }}>{totalSegs}</div>
+          <div className="s-val" style={{ color: "#FFB86B" }}><AnimatedNumber value={totalSegs} /></div>
           <div className="s-lbl">Recordings</div>
         </div>
         <div className="cms-stat">
-          <div className="s-val" style={{ color: "var(--green)" }}>{doneCount}</div>
+          <div className="s-val" style={{ color: "#5EEAB0" }}><AnimatedNumber value={doneCount} /></div>
           <div className="s-lbl">Complete</div>
         </div>
       </div>
@@ -698,7 +710,7 @@ export default function BookDashboard({ user, book }: Props) {
               <div className="cms-group-label">Front Matter</div>
               <div className="cms-chapter-grid">
                 {frontMatter.map((ch, i) => (
-                  <div key={ch.id}>
+                  <motion.div key={ch.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.4 }}>
                     <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
                       displayNumber={chapterDisplayNums.get(ch.id) ?? 0}
                       onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
@@ -707,7 +719,7 @@ export default function BookDashboard({ user, book }: Props) {
                         🎙 View {segsMap[ch.id].length} recording{segsMap[ch.id].length !== 1 ? "s" : ""}
                       </button>
                     )}
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </>
@@ -718,7 +730,7 @@ export default function BookDashboard({ user, book }: Props) {
               <div className="cms-group-label">Chapters</div>
               <div className="cms-chapter-grid">
                 {mainChapters.map((ch, i) => (
-                  <div key={ch.id}>
+                  <motion.div key={ch.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.4 }}>
                     <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
                       displayNumber={chapterDisplayNums.get(ch.id) ?? 0}
                       onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
@@ -727,7 +739,7 @@ export default function BookDashboard({ user, book }: Props) {
                         🎙 View {segsMap[ch.id].length} recording{segsMap[ch.id].length !== 1 ? "s" : ""}
                       </button>
                     )}
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </>
@@ -738,7 +750,7 @@ export default function BookDashboard({ user, book }: Props) {
               <div className="cms-group-label">Back Matter</div>
               <div className="cms-chapter-grid">
                 {backMatter.map((ch, i) => (
-                  <div key={ch.id}>
+                  <motion.div key={ch.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.4 }}>
                     <AdminChapterCard chapter={ch} segments={segsMap[ch.id] ?? []} index={i}
                       displayNumber={chapterDisplayNums.get(ch.id) ?? 0}
                       onUpdated={handleChapterUpdated} onViewManuscript={setViewMs} />
@@ -747,7 +759,7 @@ export default function BookDashboard({ user, book }: Props) {
                         🎙 View {segsMap[ch.id].length} recording{segsMap[ch.id].length !== 1 ? "s" : ""}
                       </button>
                     )}
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </>

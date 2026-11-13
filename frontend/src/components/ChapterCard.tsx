@@ -214,9 +214,15 @@ export default function ChapterCard({
     <>
       {/* ── Grid card face ── */}
       <div
-        className={`cc cc-${chapter.status}`}
+        className={`cc cc-${chapter.status} ux-spot`}
+        data-chapter-id={chapter.id}
         style={{ background: gradient, animationDelay: `${index * 60}ms` }}
         onClick={() => setOpen(true)}
+        onPointerMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+          e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+        }}
       >
         <div className={`cc-badge cc-badge-${chapter.status}`}>
           {chapter.status === "recording" && <span className="pip-rec" />}

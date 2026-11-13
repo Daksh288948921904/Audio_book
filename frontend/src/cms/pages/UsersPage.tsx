@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { cmsListUsers, type CmsUser } from "../api/adminClient";
+import { AnimatedNumber } from "../../components/landing/primitives";
 
 interface Props {
   onSelect: (user: CmsUser) => void;
@@ -58,11 +59,11 @@ export default function UsersPage({ onSelect }: Props) {
         </div>
         <div className="up-header-right">
           <div className="up-stat-pill">
-            <span className="up-stat-val">{users.length}</span>
+            <span className="up-stat-val"><AnimatedNumber value={users.length} /></span>
             <span className="up-stat-lbl">Users</span>
           </div>
           <div className="up-stat-pill">
-            <span className="up-stat-val" style={{ color: "#f59e0b" }}>{totalBooks}</span>
+            <span className="up-stat-val" style={{ color: "#FFB86B" }}><AnimatedNumber value={totalBooks} /></span>
             <span className="up-stat-lbl">Books total</span>
           </div>
         </div>

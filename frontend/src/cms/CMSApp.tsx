@@ -6,7 +6,12 @@ import UsersPage from "./pages/UsersPage";
 import UserBooksPage from "./pages/UserBooksPage";
 import BookDashboard from "./pages/BookDashboard";
 import type { CmsUser, CmsBook } from "./api/adminClient";
+import { AnimatePresence, motion } from "motion/react";
+import { TextEffect } from "../components/landing/primitives";
+import { isMac } from "../components/ui/CommandPalette";
 import "./cms.css";
+import "./cms-theme.css";
+import "../components/ui/ui.css";
 
 type View =
   | { page: "loading" }
@@ -22,6 +27,19 @@ export default function CMSApp() {
   const [searchRes, setSearchRes]     = useState<SearchResult | null>(null);
   const [searchOpen, setSearchOpen]   = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // ⌘K / Ctrl+K jumps to search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault(); searchInputRef.current?.focus(); setSearchOpen(true);
+      }
+      if (e.key === "Escape") { setSearchOpen(false); searchInputRef.current?.blur(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (!searchQ.trim()) { setSearchRes(null); return; }
@@ -83,9 +101,10 @@ export default function CMSApp() {
   if (view.page === "login") {
     return (
       <div className="cms-center">
-        <div className="cms-card">
-          <div className="cms-badge">Admin CMS</div>
-          <h1>Inkwell Studio</h1>
+        <motion.div className="cms-card" initial={{ opacity: 0, y: 20, filter: "blur(8px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
+          <div className="ux-mark" style={{ marginBottom: 22 }}>I</div>
+          <div className="cms-badge">Editor Studio</div>
+          <h1><TextEffect>Inkwell</TextEffect> <em className="ux-ember-text">Studio</em></h1>
           <p>Sign in with your admin Google account to access the content management dashboard.</p>
           {view.error && (
             <div style={{ color: "#fb7185", fontSize: 13, marginBottom: 16 }}>{view.error}</div>
@@ -93,7 +112,7 @@ export default function CMSApp() {
           <div className="cms-google-btn">
             <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setView({ page: "login", error: "Sign-in failed." })} />
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -154,7 +173,7 @@ export default function CMSApp() {
     <div className="cms-shell">
       {/* Top bar */}
       <header className="cms-topbar">
-        <div className="cms-logo">Inkwell <span>CMS</span></div>
+        <div className="cms-logo"><span className="cms-mark">I</span>Inkwell <span>Studio</span></div>
         {breadcrumb}
 
         {/* Global search */}
@@ -165,14 +184,17 @@ export default function CMSApp() {
               <path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
             <input
+              ref={searchInputRef}
               className="cms-search-input"
               placeholder="Search users or books…"
               value={searchQ}
               onChange={(e) => { setSearchQ(e.target.value); setSearchOpen(true); }}
               onFocus={() => setSearchOpen(true)}
             />
-            {searchQ && (
+            {searchQ ? (
               <button className="cms-search-clear" onClick={() => { setSearchQ(""); setSearchRes(null); }}>×</button>
+            ) : (
+              <span className="cms-search-kbd"><kbd className="ux-kbd">{isMac ? "⌘" : "Ctrl"}</kbd><kbd className="ux-kbd">K</kbd></span>
             )}
           </div>
           {searchOpen && searchQ && (
@@ -226,6 +248,14 @@ export default function CMSApp() {
 
       {/* Body */}
       <div className="cms-body">
+        <AnimatePresence mode="wait">
+        <motion.div
+          key={view.page === "dashboard" ? `d-${view.book.id}` : view.page === "books" ? `b-${view.user.google_id}` : view.page}
+          initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        >
         {view.page === "users" && (
           <UsersPage
             onSelect={(user) => setView({ page: "books", adminName, adminEmail, user })}
@@ -242,6 +272,8 @@ export default function CMSApp() {
         {view.page === "dashboard" && (
           <BookDashboard user={view.user} book={view.book} />
         )}
+        </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { cmsListBooks, type CmsBook, type CmsUser } from "../api/adminClient";
+import ProgressRing from "../../components/ui/ProgressRing";
 
 interface Props {
   user: CmsUser;
@@ -42,12 +44,15 @@ export default function UserBooksPage({ user, onSelect }: Props) {
         <div className="cms-empty">This user has no books yet.</div>
       ) : (
         <div className="cms-book-grid">
-          {books.map((b) => {
+          {books.map((b, i) => {
             const pct = b.chapter_count > 0
               ? Math.round((b.done_count / b.chapter_count) * 100)
               : 0;
             return (
-              <div key={b.id} className="cms-book-card" onClick={() => onSelect(b)}>
+              <motion.div key={b.id} className="cms-book-card" onClick={() => onSelect(b)}
+                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -4 }}>
+                <div className="cms-book-ring"><ProgressRing value={pct / 100} size={44} stroke={5}><span className="cms-book-pct">{pct}%</span></ProgressRing></div>
                 <div className="book-title">{b.title}</div>
                 <div className="book-stats">
                   <div className="stat"><strong>{b.chapter_count}</strong> chapters</div>
@@ -56,7 +61,7 @@ export default function UserBooksPage({ user, onSelect }: Props) {
                 <div className="progress-bar">
                   <div className="progress-fill" style={{ width: `${pct}%` }} />
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>

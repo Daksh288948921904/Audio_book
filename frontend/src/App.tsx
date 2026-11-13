@@ -13,6 +13,12 @@ import PublishedSection from "./components/PublishedSection";
 import WelcomeScreen from "./components/WelcomeScreen";
 import ManuscriptButton from "./components/ManuscriptButton";
 import "./dashboard-theme.css";
+import CommandPalette, { isMac, type Command } from "./components/ui/CommandPalette";
+import ProgressRing from "./components/ui/ProgressRing";
+import ChapterTimeline from "./components/ui/ChapterTimeline";
+import RolePicker from "./components/ui/RolePicker";
+import { AnimatedNumber } from "./components/landing/primitives";
+import "./components/ui/ui.css";
 
 interface PendingRec { blob: Blob; filename: string; }
 interface AuthUser { email: string; name: string; }
@@ -87,6 +93,16 @@ export default function App() {
     }, 10_000);
     return () => clearInterval(t);
   }, [anyGenerating, activeBookId]);
+
+  // ⌘K / Ctrl+K opens the command palette anywhere in the dashboard
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((o) => !o); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   async function loadBooks() {
     try {
@@ -207,54 +223,11 @@ export default function App() {
   // ── Admin role picker (existing session or fresh login routed here) ────
   if (adminPending) {
     return (
-      <div style={{
-        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-        background: "#0a0a14",
-      }}>
-        <div style={{
-          background: "#13131f", border: "1px solid #2a2a42", borderRadius: 16,
-          padding: 40, width: 360, textAlign: "center",
-        }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 13, background: "linear-gradient(135deg,#6d28d9,#8b5cf6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 20, fontWeight: 800, color: "#fff", margin: "0 auto 16px",
-          }}>I</div>
-          <h2 style={{ color: "#e4e4f0", fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Where to?</h2>
-          <p style={{ color: "#9898b8", fontSize: 14, marginBottom: 24 }}>
-            Welcome back, {adminPending.name || adminPending.email}.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <button
-              onClick={() => { window.location.href = "/cms"; }}
-              style={{
-                background: "linear-gradient(135deg,#6d28d9,#8b5cf6)", color: "#fff",
-                border: "none", borderRadius: 10, padding: "14px 20px",
-                fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left",
-              }}
-            >
-              <div>⚙ Admin Panel</div>
-              <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 3 }}>
-                Manage users, generate chapters, compile books
-              </div>
-            </button>
-            <button
-              onClick={() => { setAuthUser(adminPending); setAdminPending(null); }}
-              style={{
-                background: "rgba(255,255,255,0.06)", color: "#e4e4f0",
-                border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
-                padding: "14px 20px", fontSize: 15, fontWeight: 700,
-                cursor: "pointer", textAlign: "left",
-              }}
-            >
-              <div>📖 User Panel</div>
-              <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.6, marginTop: 3 }}>
-                Record segments, view your own books
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
+      <RolePicker
+        name={adminPending.name || adminPending.email}
+        onAdmin={() => { window.location.href = "/cms"; }}
+        onUser={() => { setAuthUser(adminPending); setAdminPending(null); }}
+      />
     );
   }
 
@@ -273,6 +246,36 @@ export default function App() {
   const numberedIds = mainChapters
     .filter((c) => c.title !== "Prologue" && c.title !== "Epilogue")
     .map((c) => c.id);
+  function openChapter(ch: Chapter) {
+    const card = document.querySelector<HTMLElement>(`[data-chapter-id="${ch.id}"]`);
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => card?.click(), 350);
+  }
+  const clickEl = (sel: string) => document.querySelector<HTMLElement>(sel)?.click();
+
+  const hour = new Date().getHours();
+  const greeting = hour < 5 ? "Writing late" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  const commands: Command[] = [
+    { id: "new-book", group: "Books", label: "New book", icon: "✚", hint: "Create", keywords: "create add start", run: () => setShowNewBook(true) },
+    ...books.map((b): Command => ({
+      id: `book-${b.id}`, group: "Books", label: b.title, icon: b.genre === "memoir" ? "✍" : "📖",
+      hint: b.id === activeBookId ? "Current" : `${b.chapter_count} chapters`, keywords: "open switch book",
+      run: () => handleSelectBook(b.id),
+    })),
+    ...(activeBook ? [
+      { id: "record", group: "Write", label: "Record a segment", icon: "🎙", hint: "Mic", keywords: "voice audio speak", run: () => clickEl(".record-zone .rec-btn") },
+      { id: "upload-audio", group: "Write", label: "Upload an audio file", icon: "⬆", keywords: "mp3 m4a wav", run: () => clickEl(".record-zone .upload-link") },
+      { id: "upload-ms", group: "Write", label: "Upload manuscript PDF", icon: "📄", keywords: "pdf book written", run: () => clickEl(".ms-upload-btn") },
+    ] : []),
+    ...chapters.map((c): Command => ({
+      id: `ch-${c.id}`, group: "Chapters", label: chapterLabel(c), icon: c.status === "done" ? "✓" : c.status === "generating" ? "✦" : "●",
+      hint: c.status === "done" ? (c.published_at ? "Published" : "Written") : c.status === "generating" ? "Writing…" : `${segsMap[c.id]?.length ?? 0} recordings`,
+      keywords: "chapter open", run: () => openChapter(c),
+    })),
+    { id: "signout", group: "Account", label: "Sign out", icon: "↩", keywords: "logout exit", run: handleSignOut },
+  ];
+
   function chapterLabel(ch: Chapter): string {
     const n = displayNum(ch);
     if (n == null) return ch.title ?? `Section ${ch.number}`;
@@ -347,6 +350,14 @@ export default function App() {
 
       {/* ── Main ── */}
       <main className="main">
+        <div className="ux-topbar">
+          <div className="ux-greet">{greeting}, <b>{authUser.name.split(" ")[0] || "author"}</b></div>
+          <button className="ux-cmdk-trigger" onClick={() => setPaletteOpen(true)}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" /><path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            <span>Search books, chapters, actions…</span>
+            <kbd className="ux-kbd">{isMac ? "⌘" : "Ctrl"}</kbd><kbd className="ux-kbd">K</kbd>
+          </button>
+        </div>
         {globalError && (
           <div className="error-bar" style={{ margin: "12px 20px 0" }}>
             {globalError}
@@ -372,16 +383,22 @@ export default function App() {
                 <div className="book-header-title">{activeBook.title}</div>
               </div>
               <div className="book-header-stats">
+                <ProgressRing value={mainChapters.length ? doneCount / mainChapters.length : 0} size={74}>
+                  <div>
+                    <div className="ux-ring-pct"><AnimatedNumber value={mainChapters.length ? Math.round((doneCount / mainChapters.length) * 100) : 0} suffix="%" /></div>
+                    <span className="ux-ring-lbl">written</span>
+                  </div>
+                </ProgressRing>
                 <div className="stat-pill">
-                  <div className="stat-n blue">{chapters.length}</div>
+                  <div className="stat-n blue"><AnimatedNumber value={chapters.length} /></div>
                   <div className="stat-label">Chapters</div>
                 </div>
                 <div className="stat-pill">
-                  <div className="stat-n amber">{totalSegs}</div>
+                  <div className="stat-n amber"><AnimatedNumber value={totalSegs} /></div>
                   <div className="stat-label">Recordings</div>
                 </div>
                 <div className="stat-pill">
-                  <div className="stat-n green">{doneCount}</div>
+                  <div className="stat-n green"><AnimatedNumber value={doneCount} /></div>
                   <div className="stat-label">Complete</div>
                 </div>
               </div>
@@ -420,6 +437,8 @@ export default function App() {
                     </div>
                   </>
                 )}
+
+                <ChapterTimeline chapters={mainChapters} labelFor={chapterLabel} onOpen={openChapter} />
 
                 {/* Main Chapters */}
                 <div className="feed-head">
@@ -504,6 +523,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands}
+        placeholder="Search books, chapters, or type an action…" />
 
       {/* ── New Book Modal ── */}
       {showNewBook && (
