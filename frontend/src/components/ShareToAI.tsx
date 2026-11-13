@@ -9,14 +9,22 @@ interface Props {
 }
 
 const AIS = [
-  { name: "ChatGPT", url: (q: string) => `https://chatgpt.com/?q=${encodeURIComponent(q)}` },
-  { name: "Claude",  url: (q: string) => `https://claude.ai/new?q=${encodeURIComponent(q)}` },
-  { name: "Gemini",  url: () => "https://gemini.google.com/app" },  // no prompt prefill
+  { name: "ChatGPT", url: (q: string) => `https://chatgpt.com/?q=${encodeURIComponent(q)}`, prefill: true },
+  { name: "Claude",  url: (q: string) => `https://claude.ai/new?q=${encodeURIComponent(q)}`, prefill: true },
+  { name: "Gemini",  url: () => "https://gemini.google.com/app", prefill: false },  // no prompt prefill
 ];
 
-// Take a published chapter into an AI chat app. Sites can't receive a file through
-// a link, so on desktop we download the PDF, copy the text and open the chat with a
-// prompt; on phones the native share sheet hands the PDF straight to the app.
+// Both chat sites sit behind Cloudflare, which rejects URLs over ~16 KB; keep the
+// filled-in prompt well under that (~8–9k characters of chapter text).
+const MAX_PREFILL_BYTES = 12_000;
+
+const PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘V" : "Ctrl+V";
+
+// Take a published chapter into an AI chat app. A site can't attach a file inside
+// another site, and browsers only copy text/images — so on desktop the chapter text
+// goes straight into the chat box (or the clipboard if it's too long for a link),
+// and the PDF is downloaded to drag in. On phones the native share sheet hands the
+// PDF itself to the ChatGPT / Claude / Gemini app.
 export default function ShareToAI({ chapterId, label, bookTitle, onClose }: Props) {
   const [pdf, setPdf] = useState<File | null>(null);
   const [text, setText] = useState("");
@@ -25,8 +33,9 @@ export default function ShareToAI({ chapterId, label, bookTitle, onClose }: Prop
   const [error, setError] = useState<string | null>(null);
 
   const filename = `${bookTitle} - ${label}.pdf`.replace(/[\\/:*?"<>|]+/g, " ");
-  const prompt = `I'm sharing ${label} of my book "${bookTitle}". I'll attach the PDF (or paste the text). ` +
-    "Please read it and give me feedback.";
+  const intro = `Here is ${label} of my book "${bookTitle}". Please read it and give me feedback.`;
+  const withText = `${intro}\n\n---\n\n${text}`;
+  const fitsInLink = encodeURIComponent(withText).length <= MAX_PREFILL_BYTES;
 
   useEffect(() => {
     Promise.all([fetchChapterPdf(chapterId), getChapter(chapterId)])
@@ -49,7 +58,7 @@ export default function ShareToAI({ chapterId, label, bookTitle, onClose }: Prop
   async function shareFile() {
     if (!pdf) return;
     try {
-      await navigator.share({ files: [pdf], title: filename, text: prompt });
+      await navigator.share({ files: [pdf], title: filename, text: intro });
     } catch (e) {
       if ((e as Error).name !== "AbortError") setError(String(e));
     }
@@ -57,11 +66,18 @@ export default function ShareToAI({ chapterId, label, bookTitle, onClose }: Prop
 
   async function openIn(ai: typeof AIS[number]) {
     if (!pdf) return;
-    // Open first: browsers block pop-ups that aren't opened directly in the click.
-    window.open(ai.url(prompt), "_blank", "noopener");
+    const inline = ai.prefill && fitsInLink;
+    // Start the copy while this page still has focus, but don't await it before
+    // window.open — pop-up blockers only allow tabs opened straight from the click.
+    const copying = inline ? Promise.resolve(true) : copyText();
+    window.open(ai.url(inline ? withText : `${intro}\n\n`), "_blank", "noopener");
     saveBlob(pdf, filename);
-    const copied = await copyText();
-    setNote(`PDF downloaded${copied ? " and text copied" : ""} — attach the PDF${copied ? " or paste the text" : ""} in ${ai.name}.`);
+    const copied = await copying;
+    setNote(inline
+      ? `Opened ${ai.name} with the chapter filled in — just press send. The PDF also downloaded if you'd rather drag it in.`
+      : copied
+        ? `In ${ai.name}, click the message box and press ${PASTE_KEY} to paste the chapter, then send. The PDF also downloaded — you can drag it in instead.`
+        : `Your browser blocked copying. The PDF downloaded — drag it into ${ai.name}, or use "Copy text" below.`);
   }
 
   return (
@@ -83,6 +99,11 @@ export default function ShareToAI({ chapterId, label, bookTitle, onClose }: Prop
               <button className="share-primary" onClick={shareFile}>📤 Share PDF to an app…</button>
             )}
             <div className="share-label">{canShareFile ? "Or open in" : "Open in"}</div>
+            <div className="share-hint">
+              {fitsInLink
+                ? "ChatGPT and Claude open with the whole chapter already in the message box."
+                : `This chapter is too long to fill in automatically — it's copied for you; press ${PASTE_KEY} in the chat box.`}
+            </div>
             <div className="share-row">
               {AIS.map((ai) => (
                 <button key={ai.name} className="ch-rec-upload" onClick={() => openIn(ai)}>{ai.name}</button>

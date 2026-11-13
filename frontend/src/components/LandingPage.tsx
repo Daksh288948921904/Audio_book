@@ -1,68 +1,81 @@
 import { useEffect, useRef, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
+import { AnimatePresence, MotionConfig, motion, useInView, useScroll, useTransform } from "motion/react";
 import { loginWithGoogle, setAuthToken } from "../api/client";
+import {
+  AnimatedNumber, BorderTrail, InView, InfiniteSlider, Spotlight, TextEffect, Tilt, Waveform,
+} from "./landing/primitives";
+import { ChapterMock, CmsMock, ContextFlow, DashboardMock, ReaderMock, ShareMock } from "./landing/mocks";
+import "./landing/landing.css";
 
 interface Props {
   onLogin: (user: { email: string; name: string }) => void;
 }
 
-function useInView(threshold = 0.1) {
-  const ref = useRef<HTMLElement>(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } },
-      { threshold }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [threshold]);
-  return [ref, visible] as const;
-}
-
-function Reveal({ children, className = "", delay = 0 }: {
-  children: React.ReactNode; className?: string; delay?: number;
-}) {
-  const [ref, visible] = useInView();
-  return (
-    <section
-      ref={ref}
-      className={`lp-reveal ${visible ? "lp-revealed" : ""} ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
-    >
-      {children}
-    </section>
-  );
-}
-
-const WAVE_BARS = 32;
-
-const POSSIBLE = [
-  { icon: "📖", title: "Your memoir", body: "A structured, readable account of your life — shaped by your voice, not a ghostwriter's." },
-  { icon: "👨‍👩‍👧", title: "A legacy for family", body: "Stories your children and grandchildren will return to long after you're gone." },
-  { icon: "🤍", title: "A gift to yourself", body: "The clarity and closure that comes from finally putting your story into words." },
-  { icon: "🌐", title: "A voice in the world", body: "Your perspective, published — as an audiobook, ebook, or printed memoir." },
+// ── Pricing — edit here ─────────────────────────────────────────────────────
+const PRICE = 210;
+const PRICE_TERM = "one-time · per author";
+const PRICE_FEATURES = [
+  "Record in the app or upload audio — up to 2½ hours per recording",
+  "Bring what you've written: manuscript or chapter PDFs, or type it in",
+  "Chapters written in your voice, each one remembering the last",
+  "A human editor reviews every chapter before it's published to you",
+  "Read, listen aloud, download PDFs and share chapters to your AI",
+  "Private by default — only you and your editor see your book",
 ];
 
-const STEPS = [
-  { n: "01", title: "Speak freely", body: "No outline required. Just press record and tell your story the way you'd tell a friend — in whatever order it comes.", icon: "🎙" },
-  { n: "02", title: "Watch it become a chapter", body: "Your words are analysed by our team but they dont turn it into pros without preserving your voice, your rhythm, your way of seeing the world. Nothing gets invented. Everything is you.", icon: "✦" },
-  { n: "03", title: "Shape it into a book", body: "Review, refine, reorder. Build chapter by chapter until the full arc of your life is there on the page — exactly as you lived it.", icon: "📚" },
+const BOOK_KINDS = [
+  "Memoir", "Family history", "Founder story", "Novel", "Travel journal", "Letters to my kids",
+  "Faith journey", "Recipe & memory book", "War & service", "Immigration story", "Life lessons", "Love story",
 ];
 
-const STORIES = [
-  { title: "The immigrant journey", body: "What it cost to start over. What it built. What it meant." },
-  { title: "The survival story", body: "The chapter of your life that changed everything — told finally, on your terms." },
-  { title: "A life well lived", body: "Decades of experience, hard-earned wisdom, and a story worth preserving." },
-  { title: "For the family", body: "Your parents' story. Your grandparents' story. Rescued before it disappears." },
+const STORY = [
+  {
+    kicker: "Night one",
+    title: "She didn't write. She just talked.",
+    body: "Maya opened Chapter 1, pressed Record and told the story of the lighthouse the way she'd tell a friend — out of order, with tangents, for forty minutes. Long recordings are fine; Inkwell handles up to two and a half hours at a time.",
+    stage: "record",
+  },
+  {
+    kicker: "Week one",
+    title: "Some of it was already on paper.",
+    body: "She had a half-finished draft and a folder of notes. She uploaded the draft as a PDF, typed a few paragraphs straight into the chapter, and used + Add more to line up voice, pages and text in exactly the order she wanted.",
+    stage: "parts",
+  },
+  {
+    kicker: "Week two",
+    title: "Her chapters started writing themselves.",
+    body: "Each chapter is written from her own words — polished, never invented — and carries a summary of the one before it, so Chapter 3 knows what happened in Chapter 2. The storm she mentioned once in passing came back exactly when it should.",
+    stage: "book",
+  },
+  {
+    kicker: "Week four",
+    title: "An editor read every page.",
+    body: "Before anything reached her, a human editor on our team reviewed each chapter in the studio, fixed what needed fixing, and sent it to her when it was ready.",
+    stage: "cms",
+  },
+  {
+    kicker: "Week six",
+    title: "Then she listened to her own book.",
+    body: "She played Chapter 3 aloud on the drive to her daughter's, downloaded the PDF for her brother, and shared it with her AI assistant to brainstorm a title. The lighthouse book was real.",
+    stage: "read",
+  },
+] as const;
+
+const FAQ = [
+  { q: "Do I need to be a writer?", a: "No. Most authors never type a sentence — they talk. If you have written something, upload it or paste it in and it becomes part of the chapter." },
+  { q: "Will it still sound like me?", a: "Yes. Chapters are written from your own recordings and pages, keeping your voice and your details. Nothing is invented, and an editor reviews every chapter." },
+  { q: "How long can a recording be?", a: "Up to about two and a half hours per recording, and as many recordings per chapter as you like. You can also upload audio you've recorded elsewhere." },
+  { q: "I've already written part of my book.", a: "Upload the whole manuscript as a PDF and we turn it into chapters, or attach a PDF to a single chapter. Your text is polished and kept; new recordings continue the story from there." },
+  { q: "Who can see my book?", a: "Only you and the editor working on it. Your book is never published anywhere unless you choose to share it." },
+  { q: `What does $${PRICE} include?`, a: "Everything on this page for your book: recording, uploads, chapter writing with memory across chapters, editor review, the reader, audio playback, PDFs and Share to AI." },
 ];
 
 export default function LandingPage({ onLogin }: Props) {
   const [showSignIn, setShowSignIn] = useState(false);
   const [authError, setAuthError]   = useState<string | null>(null);
   const [adminUser, setAdminUser]   = useState<{ email: string; name: string } | null>(null);
+  const start = () => setShowSignIn(true);
 
   async function handleGoogleSuccess(cr: { credential?: string }) {
     if (!cr.credential) return;
@@ -82,299 +95,387 @@ export default function LandingPage({ onLogin }: Props) {
   }
 
   return (
-    <div className="lp">
+    <MotionConfig reducedMotion="user">
+      <div className="lx">
+        <Nav onStart={start} />
+        <Hero onStart={start} />
 
-      {/* ── Sticky nav ── */}
-      <nav className="lp-nav">
-        <div className="lp-nav-inner">
-          <div className="lp-nav-brand">
-            <div className="lp-brand-mark">I</div>
-            <span className="lp-brand-name">Inkwell</span>
+        <section className="lx-kinds">
+          <p className="lx-kinds-label">Books our authors are writing</p>
+          <InfiniteSlider duration={45}>
+            {BOOK_KINDS.map((k) => <span key={k} className="lx-kind">✦ {k}</span>)}
+          </InfiniteSlider>
+        </section>
+
+        <Bento />
+        <Story />
+        <Numbers />
+        <Pricing onStart={start} />
+        <Faq />
+
+        <section className="lx-final">
+          <div className="lx-final-glow" aria-hidden />
+          <InView className="lx-final-inner">
+            <h2 className="lx-h2 lx-final-h">Your story is already in you.<br /><em>Let's get it on the page.</em></h2>
+            <p className="lx-final-sub">Press record tonight. Read your first chapter this week.</p>
+            <button className="lx-cta lx-cta-light" onClick={start}>Start your book — ${PRICE}<span className="lx-cta-arrow">→</span></button>
+          </InView>
+        </section>
+
+        <footer className="lx-footer">
+          <div className="lx-brand"><span className="lx-mark">I</span> Inkwell</div>
+          <p>Your story. Your voice. Your book.</p>
+          <div className="lx-footer-links">
+            <a href="#story">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
+            <button onClick={start}>Sign in</button>
           </div>
-          <button className="lp-nav-btn" onClick={() => setShowSignIn(true)}>Sign in →</button>
-        </div>
-      </nav>
+        </footer>
 
-      {/* ── Hero ── */}
-      <header className="lp-hero">
-        {/* Background orbs */}
-        <div className="lp-orb lp-orb-1" aria-hidden />
-        <div className="lp-orb lp-orb-2" aria-hidden />
-        <div className="lp-orb lp-orb-3" aria-hidden />
-        {/* Grid */}
-        <div className="lp-grid-bg" aria-hidden />
-
-        <div className="lp-hero-text">
-          <p className="lp-eyebrow">
-            <span className="lp-eyebrow-dot" />
-            AudioBook Studio
-          </p>
-          <h1 className="lp-h1">
-            Your life<br />is a book.<br />
-            <span className="lp-grad-text">It's time someone<br />finally wrote it.</span>
-          </h1>
-          <p className="lp-hero-lead">
-            You've carried your story long enough. The moments that shaped you, the lessons that cost you, the journey no one else has lived — they deserve more than memory. They deserve permanence.
-          </p>
-          <p className="lp-hero-sub">Inkell helps you to capture your voice from your heart and our team helps shape into a memoir we are proud of.
-          </p>
-          <div className="lp-hero-actions">
-            <button className="lp-hero-cta" onClick={() => setShowSignIn(true)}>
-              <span className="lp-cta-shimmer" />
-              Start telling your story
-              <span className="lp-cta-arrow">→</span>
-            </button>
-            <p className="lp-hero-note">Free to start · No writing required</p>
-          </div>
-        </div>
-
-        <div className="lp-hero-visual" aria-hidden>
-          {/* Glow rings */}
-          <div className="lp-ring lp-ring-1" />
-          <div className="lp-ring lp-ring-2" />
-          <div className="lp-ring lp-ring-3" />
-
-          {/* Mic orb */}
-          <div className="lp-mic">
-            <svg viewBox="0 0 48 48" fill="none">
-              <rect x="16" y="3" width="16" height="26" rx="8" fill="url(#micGrad)"/>
-              <path d="M8 24c0 8.837 7.163 16 16 16s16-7.163 16-16" stroke="url(#micGrad)" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-              <line x1="24" y1="40" x2="24" y2="46" stroke="#8B9BB4" strokeWidth="2.5" strokeLinecap="round"/>
-              <line x1="17" y1="46" x2="31" y2="46" stroke="#8B9BB4" strokeWidth="2.5" strokeLinecap="round"/>
-              <defs>
-                <linearGradient id="micGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#5B8DEF"/>
-                  <stop offset="100%" stopColor="#8B5CF6"/>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-
-          {/* Waveform */}
-          <div className="lp-waveform">
-            {Array.from({ length: WAVE_BARS }, (_, i) => (
-              <div
-                key={i}
-                className="lp-wbar"
-                style={{ animationDelay: `${(i * 0.065).toFixed(3)}s` }}
-              />
-            ))}
-          </div>
-
-          {/* Recording pill */}
-          <div className="lp-recording-pill">
-            <span className="lp-rec-dot" /> Recording…
-          </div>
-        </div>
-      </header>
-
-      {/* ── Stats strip ── */}
-      <Reveal className="lp-stats-strip">
-        <div className="lp-stats-inner">
-          {[
-            { n: "~2 min", l: "Average voice recording" },
-            { n: "1 session", l: "To complete a chapter" },
-            { n: "∞", l: "Stories waiting to be told" },
-          ].map((s, i) => (
-            <div key={i} className="lp-stat">
-              <div className="lp-stat-n">{s.n}</div>
-              <div className="lp-stat-l">{s.l}</div>
-            </div>
-          ))}
-        </div>
-      </Reveal>
-
-      {/* ── Quote ── */}
-      <Reveal className="lp-section lp-section-mid">
-        <div className="lp-inner">
-          <p className="lp-eyebrow">The truth most writers never say out loud</p>
-          <blockquote className="lp-quote">
-            <span className="lp-big-quote">"</span>
-            I've always known I had a book in me.<br />I just didn't know how to begin.
-          </blockquote>
-          <div className="lp-quote-body">
-            <p>The blank page isn't the problem. The problem is that your story lives in you as <em>feeling</em>, not as sentences. You remember the smell of your grandmother's kitchen. The weight of a decision that changed everything. The moment you knew you'd survived something.</p>
-            <p className="lp-pull">That's not a writing problem — that's a voice waiting to be heard.</p>
-          </div>
-        </div>
-      </Reveal>
-
-      {/* ── What's possible ── */}
-      <Reveal className="lp-section">
-        <div className="lp-inner">
-          <p className="lp-eyebrow">What this makes possible</p>
-          <h2 className="lp-h2">One conversation at a time,<br />your book takes shape.</h2>
-          <div className="lp-grid-4">
-            {POSSIBLE.map((c, i) => (
-              <div key={i} className="lp-card" style={{ animationDelay: `${i * 90}ms` }}>
-                <div className="lp-card-icon">{c.icon}</div>
-                <h3 className="lp-card-title">{c.title}</h3>
-                <p className="lp-card-body">{c.body}</p>
+        {/* ── Admin role picker ── */}
+        {adminUser && (
+          <div className="lp-overlay">
+            <div className="lp-signin-card">
+              <div className="lp-signin-logo">
+                <div className="lp-brand-mark" style={{ width: 48, height: 48, fontSize: 20, borderRadius: 13 }}>I</div>
               </div>
-            ))}
-          </div>
-        </div>
-      </Reveal>
-
-      {/* ── How it works ── */}
-      <Reveal className="lp-section lp-section-mid">
-        <div className="lp-inner lp-inner-wide">
-          <p className="lp-eyebrow">How it works</p>
-          <h2 className="lp-h2">You talk we capture the thought and help make it take shape</h2>
-          <div className="lp-steps">
-            {STEPS.map((s, i) => (
-              <div key={i} className="lp-step" style={{ animationDelay: `${i * 100}ms` }}>
-                <div className="lp-step-n">{s.n}</div>
-                <div className="lp-step-content">
-                  <span className="lp-step-icon">{s.icon}</span>
-                  <h3 className="lp-step-title">{s.title}</h3>
-                  <p className="lp-step-body">{s.body}</p>
-                </div>
+              <h2 className="lp-signin-title">Where to?</h2>
+              <p className="lp-signin-sub">Welcome back, {adminUser.name || adminUser.email}.</p>
+              <div className="lp-signin-rule" />
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+                <button
+                  onClick={() => { window.location.href = "/cms"; }}
+                  style={{
+                    background: "linear-gradient(135deg, #6d28d9, #8b5cf6)",
+                    color: "#fff", border: "none", borderRadius: 10,
+                    padding: "14px 20px", fontSize: 15, fontWeight: 700,
+                    cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <div>⚙ Admin Panel</div>
+                  <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 3 }}>
+                    Manage users, generate chapters, compile books
+                  </div>
+                </button>
+                <button
+                  onClick={() => onLogin(adminUser)}
+                  style={{
+                    background: "rgba(255,255,255,0.06)", color: "#e4e4f0",
+                    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
+                    padding: "14px 20px", fontSize: 15, fontWeight: 700,
+                    cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <div>📖 User Panel</div>
+                  <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.6, marginTop: 3 }}>
+                    Record segments, view your own books
+                  </div>
+                </button>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      </Reveal>
+        )}
 
-      {/* ── Urgency (gradient band) ── */}
-      <Reveal className="lp-section lp-section-gradient">
-        <div className="lp-inner">
-          <p className="lp-eyebrow lp-eyebrow-soft">For the writer who keeps saying "someday"</p>
-          <h2 className="lp-h2 lp-h2-white">The time you've been waiting for<br />is right now.</h2>
-          <p className="lp-body lp-body-soft">
-            Memories fade. The people who lived through it with you won't always be here to fill the gaps. Every year you wait is a year your story gets a little harder to tell.
-          </p>
-          <p className="lp-body lp-body-soft">
-            You don't need to write a single word. You just need to start talking.
-          </p>
-          <button className="lp-hero-cta lp-cta-glass" onClick={() => setShowSignIn(true)}>
-            Begin your memoir today
-            <span className="lp-cta-arrow">→</span>
-          </button>
-        </div>
-      </Reveal>
-
-      {/* ── Story types ── */}
-      <Reveal className="lp-section">
-        <div className="lp-inner">
-          <p className="lp-eyebrow">For every kind of story</p>
-          <div className="lp-grid-4">
-            {STORIES.map((c, i) => (
-              <div key={i} className="lp-card lp-card-accent">
-                <h3 className="lp-card-title">{c.title}</h3>
-                <p className="lp-card-body">{c.body}</p>
+        {/* ── Sign-in overlay ── */}
+        {showSignIn && (
+          <div
+            className="lp-overlay"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowSignIn(false); }}
+          >
+            <div className="lp-signin-card">
+              <button className="lp-signin-close" onClick={() => setShowSignIn(false)}>✕</button>
+              <div className="lp-signin-logo">
+                <div className="lp-brand-mark" style={{ width: 48, height: 48, fontSize: 20, borderRadius: 13 }}>I</div>
               </div>
-            ))}
+              <h2 className="lp-signin-title">Begin your book</h2>
+              <p className="lp-signin-sub">Sign in to create your private writing space.</p>
+              <div className="lp-signin-rule" />
+              {authError && <p className="lp-signin-error">{authError}</p>}
+              <div className="lp-signin-google">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setAuthError("Google sign-in failed.")}
+                  theme="filled_black"
+                  shape="rectangular"
+                  size="large"
+                  text="continue_with"
+                  width="280"
+                />
+              </div>
+              <p className="lp-signin-fine">Your story is private. Only you can access your books.</p>
+              <div className="lp-signin-badges">
+                <span>🔒 Private</span>
+                <span>☁ Cloud saved</span>
+                <span>✦ Voice-powered</span>
+              </div>
+            </div>
           </div>
-        </div>
-      </Reveal>
+        )}
+      </div>
+    </MotionConfig>
+  );
+}
 
-      {/* ── Final CTA ── */}
-      <Reveal className="lp-section lp-section-mid lp-final-cta">
-        <div className="lp-inner lp-inner-center">
-          <div className="lp-final-icon">✍</div>
-          <h2 className="lp-h2">Every story deserves to be told.</h2>
-          <p className="lp-body lp-body-center">
-            Yours is no different. The only thing standing between you and your book is the first sentence.
+// ── Sections ─────────────────────────────────────────────────────────────────
+
+function Nav({ onStart }: { onStart: () => void }) {
+  const { scrollY } = useScroll();
+  const bg = useTransform(scrollY, [0, 80], ["rgba(9,9,18,0)", "rgba(9,9,18,0.72)"]);
+  const border = useTransform(scrollY, [0, 80], ["rgba(255,255,255,0)", "rgba(255,255,255,0.07)"]);
+  return (
+    <motion.nav className="lx-nav" style={{ background: bg, borderColor: border }}>
+      <div className="lx-nav-inner">
+        <a className="lx-brand" href="#top"><span className="lx-mark">I</span> Inkwell</a>
+        <div className="lx-nav-links">
+          <a href="#product">Product</a><a href="#story">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
+        </div>
+        <div className="lx-nav-right">
+          <button className="lx-nav-signin" onClick={onStart}>Sign in</button>
+          <button className="lx-cta lx-cta-sm" onClick={onStart}>Start your book</button>
+        </div>
+      </div>
+    </motion.nav>
+  );
+}
+
+function Hero({ onStart }: { onStart: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
+  const shotY = useTransform(scrollYProgress, [0, 1], [0, 120]);
+  const shotScale = useTransform(scrollYProgress, [0, 1], [1, 0.94]);
+  return (
+    <header className="lx-hero" id="top" ref={ref}>
+      <Spotlight />
+      <div className="lx-aurora" aria-hidden><span /><span /><span /></div>
+      <div className="lx-grid" aria-hidden />
+
+      <div className="lx-hero-copy">
+        <motion.a href="#story" className="lx-pill" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+          <span className="lx-pill-new">New</span> Voice, pages or both — in any order <span aria-hidden>→</span>
+        </motion.a>
+        <h1 className="lx-h1">
+          <TextEffect>Speak your story.</TextEffect><br />
+          <TextEffect delay={0.35}>We'll make it a</TextEffect>{" "}
+          <motion.em className="lx-ember-text" initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }} transition={{ delay: 0.75, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
+            book.
+          </motion.em>
+        </h1>
+        <InView delay={0.9} y={16}>
+          <p className="lx-lead">
+            Inkwell turns your voice notes, drafts and memories into finished chapters — written in your words,
+            reviewed by a real editor, ready to read, hear and share.
           </p>
-          <button className="lp-hero-cta" onClick={() => setShowSignIn(true)}>
-            <span className="lp-cta-shimmer" />
-            Start for free today
-            <span className="lp-cta-arrow">→</span>
-          </button>
-        </div>
-      </Reveal>
-
-      {/* ── Footer ── */}
-      <footer className="lp-footer">
-        <div className="lp-footer-inner">
-          <div className="lp-nav-brand">
-            <div className="lp-brand-mark lp-brand-mark-sm">I</div>
-            <span className="lp-brand-name">Inkwell</span>
+          <div className="lx-hero-ctas">
+            <button className="lx-cta" onClick={onStart}><span className="lx-cta-shine" />Start your book<span className="lx-cta-arrow">→</span></button>
+            <a className="lx-cta-ghost" href="#story">See how it works</a>
           </div>
-          <p className="lp-footer-tagline">Your story. Your voice. Your book.</p>
-        </div>
-      </footer>
-
-      {/* ── Admin role picker ── */}
-      {adminUser && (
-        <div className="lp-overlay">
-          <div className="lp-signin-card">
-            <div className="lp-signin-logo">
-              <div className="lp-brand-mark" style={{ width: 48, height: 48, fontSize: 20, borderRadius: 13 }}>I</div>
-            </div>
-            <h2 className="lp-signin-title">Where to?</h2>
-            <p className="lp-signin-sub">Welcome back, {adminUser.name || adminUser.email}.</p>
-            <div className="lp-signin-rule" />
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
-              <button
-                onClick={() => { window.location.href = "/cms"; }}
-                style={{
-                  background: "linear-gradient(135deg, #6d28d9, #8b5cf6)",
-                  color: "#fff", border: "none", borderRadius: 10,
-                  padding: "14px 20px", fontSize: 15, fontWeight: 700,
-                  cursor: "pointer", textAlign: "left",
-                }}
-              >
-                <div>⚙ Admin Panel</div>
-                <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 3 }}>
-                  Manage users, generate chapters, compile books
-                </div>
-              </button>
-              <button
-                onClick={() => onLogin(adminUser)}
-                style={{
-                  background: "rgba(255,255,255,0.06)", color: "#e4e4f0",
-                  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
-                  padding: "14px 20px", fontSize: 15, fontWeight: 700,
-                  cursor: "pointer", textAlign: "left",
-                }}
-              >
-                <div>📖 User Panel</div>
-                <div style={{ fontSize: 12, fontWeight: 400, opacity: 0.6, marginTop: 3 }}>
-                  Record segments, view your own books
-                </div>
-              </button>
-            </div>
+          <div className="lx-trust">
+            <span>${PRICE} {PRICE_TERM.split(" · ")[0]}</span><i /><span>Editor-reviewed chapters</span><i /><span>Private by default</span>
           </div>
-        </div>
-      )}
+        </InView>
+      </div>
 
-      {/* ── Sign-in overlay ── */}
-      {showSignIn && (
-        <div
-          className="lp-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowSignIn(false); }}
-        >
-          <div className="lp-signin-card">
-            <button className="lp-signin-close" onClick={() => setShowSignIn(false)}>✕</button>
-            <div className="lp-signin-logo">
-              <div className="lp-brand-mark" style={{ width: 48, height: 48, fontSize: 20, borderRadius: 13 }}>I</div>
-            </div>
-            <h2 className="lp-signin-title">Begin your memoir</h2>
-            <p className="lp-signin-sub">Sign in to create your private writing space.</p>
-            <div className="lp-signin-rule" />
-            {authError && <p className="lp-signin-error">{authError}</p>}
-            <div className="lp-signin-google">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setAuthError("Google sign-in failed.")}
-                theme="filled_black"
-                shape="rectangular"
-                size="large"
-                text="continue_with"
-                width="280"
-              />
-            </div>
-            <p className="lp-signin-fine">Your story is private. Only you can access your books.</p>
-            <div className="lp-signin-badges">
-              <span>🔒 Private</span>
-              <span>☁ Cloud saved</span>
-              <span>✦ Voice-powered</span>
-            </div>
+      <motion.div className="lx-hero-shot" style={{ y: shotY, scale: shotScale }}
+        initial={{ opacity: 0, y: 60, rotateX: 18 }} animate={{ opacity: 1, y: 0, rotateX: 0 }}
+        transition={{ delay: 0.5, duration: 1.1, ease: [0.22, 1, 0.36, 1] }}>
+        <Tilt max={4}><DashboardMock /></Tilt>
+        <motion.div className="lx-float lx-float-rec" initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1.4 }}>
+          <span className="lx-rec-dot" /> Recording · Chapter 4
+          <Waveform bars={26} height={22} className="lx-float-wave" />
+        </motion.div>
+        <motion.div className="lx-float lx-float-ctx" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1.7 }}>
+          <span className="lx-float-ic">✦</span>
+          <div><b>Writing Chapter 3</b><span>with what happened in Chapter 2</span></div>
+        </motion.div>
+        <motion.div className="lx-float lx-float-pub" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 2.0 }}>
+          <span className="lx-check">✓</span> Chapter 2 published to you
+        </motion.div>
+      </motion.div>
+    </header>
+  );
+}
+
+function Bento() {
+  return (
+    <section className="lx-section" id="product">
+      <InView className="lx-head">
+        <p className="lx-eyebrow">The product</p>
+        <h2 className="lx-h2">Everything a first book needs.<br /><em>Nothing it doesn't.</em></h2>
+      </InView>
+      <div className="lx-bento">
+        <InView className="lx-tile lx-tile-tall">
+          <div className="lx-tile-copy">
+            <h3>Talk, upload, type — in one place</h3>
+            <p>Every chapter takes recordings, audio files, PDFs and typed text. Add more parts and they're written in exactly that order.</p>
           </div>
-        </div>
-      )}
+          <div className="lx-tile-shot"><ChapterMock /></div>
+        </InView>
+        <InView className="lx-tile" delay={0.08}>
+          <div className="lx-tile-copy">
+            <h3>Every chapter remembers the last</h3>
+            <p>A summary of each chapter flows into the next, so threads and characters carry through the whole book.</p>
+          </div>
+          <ContextFlow />
+        </InView>
+        <InView className="lx-tile" delay={0.16}>
+          <div className="lx-tile-copy">
+            <h3>Long recordings welcome</h3>
+            <p>Ramble for hours. We transcribe it all and keep every detail in order.</p>
+          </div>
+          <div className="lx-big-stat"><AnimatedNumber value={150} /><span>min per recording</span></div>
+          <Waveform bars={40} height={30} className="lx-tile-wave" />
+        </InView>
+        <InView className="lx-tile lx-tile-wide" delay={0.08}>
+          <div className="lx-tile-copy">
+            <h3>Read it. Hear it. Share it.</h3>
+            <p>A beautiful reader with listen-aloud, one-click PDFs, and Share to AI for ChatGPT, Claude or Gemini.</p>
+          </div>
+          <div className="lx-tile-shot lx-tile-shot-row">
+            <div className="lx-tile-reader"><ReaderMock /></div>
+            <div className="lx-tile-share"><ShareMock /></div>
+          </div>
+        </InView>
+      </div>
+    </section>
+  );
+}
+
+function StoryStep({ step, i, onActive }: { step: typeof STORY[number]; i: number; onActive: (i: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { amount: 0.6 });
+  useEffect(() => { if (inView) onActive(i); }, [inView, i, onActive]);
+  return (
+    <div ref={ref} className="lx-step">
+      <span className="lx-step-n">{String(i + 1).padStart(2, "0")}</span>
+      <p className="lx-step-kicker">{step.kicker}</p>
+      <h3 className="lx-step-title">{step.title}</h3>
+      <p className="lx-step-body">{step.body}</p>
+      <div className="lx-step-stage-mobile"><Stage stage={step.stage} /></div>
     </div>
+  );
+}
+
+function Stage({ stage }: { stage: typeof STORY[number]["stage"] }) {
+  switch (stage) {
+    case "record": return <ChapterMock compact />;
+    case "parts":  return <ChapterMock />;
+    case "book":   return <DashboardMock />;
+    case "cms":    return <CmsMock />;
+    case "read":   return <div className="lx-stage-read"><ReaderMock /><div className="lx-stage-share"><ShareMock /></div></div>;
+  }
+}
+
+function Story() {
+  const [active, setActive] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start center", "end center"] });
+  return (
+    <section className="lx-section lx-story" id="story">
+      <InView className="lx-head">
+        <p className="lx-eyebrow">How it works</p>
+        <h2 className="lx-h2">Meet Maya. <em>Here's how her book got written.</em></h2>
+        <p className="lx-head-sub">An example journey — from a first voice note to a book she could hold.</p>
+      </InView>
+      <div className="lx-story-grid" ref={ref}>
+        <div className="lx-story-rail" aria-hidden>
+          <motion.div className="lx-story-rail-fill" style={{ scaleY: scrollYProgress }} />
+        </div>
+        <div className="lx-story-steps">
+          {STORY.map((s, i) => <StoryStep key={i} step={s} i={i} onActive={setActive} />)}
+        </div>
+        <div className="lx-story-stage">
+          <div className="lx-story-sticky">
+            <AnimatePresence mode="wait">
+              <motion.div key={active}
+                initial={{ opacity: 0, y: 24, scale: 0.97, filter: "blur(8px)" }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -16, scale: 0.98, filter: "blur(6px)" }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
+                <Stage stage={STORY[active].stage} />
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Numbers() {
+  const items = [
+    { node: <AnimatedNumber value={2.5} decimals={1} suffix=" hrs" />, label: "of audio per recording" },
+    { node: <AnimatedNumber value={3} />, label: "ways in — voice, PDF, typing" },
+    { node: <AnimatedNumber value={0} />, label: "sentences you have to write" },
+    { node: <AnimatedNumber value={1} />, label: "editor reading every chapter" },
+  ];
+  return (
+    <section className="lx-numbers">
+      {items.map((it, i) => (
+        <InView key={i} className="lx-num" delay={i * 0.08}>
+          <div className="lx-num-n">{it.node}</div>
+          <div className="lx-num-l">{it.label}</div>
+        </InView>
+      ))}
+    </section>
+  );
+}
+
+function Pricing({ onStart }: { onStart: () => void }) {
+  return (
+    <section className="lx-section lx-pricing" id="pricing">
+      <InView className="lx-head">
+        <p className="lx-eyebrow">Pricing</p>
+        <h2 className="lx-h2">One price. <em>Your whole book.</em></h2>
+      </InView>
+      <InView className="lx-price-wrap" delay={0.1}>
+        <div className="lx-price-card">
+          <BorderTrail duration={7} />
+          <div className="lx-price-top">
+            <span className="lx-price-tag">Author</span>
+            <div className="lx-price">
+              <span className="lx-price-cur">$</span><AnimatedNumber value={PRICE} />
+            </div>
+            <div className="lx-price-term">{PRICE_TERM}</div>
+          </div>
+          <ul className="lx-price-list">
+            {PRICE_FEATURES.map((f) => (
+              <li key={f}><svg viewBox="0 0 16 16" aria-hidden><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>{f}</li>
+            ))}
+          </ul>
+          <button className="lx-cta lx-cta-block" onClick={onStart}><span className="lx-cta-shine" />Start your book<span className="lx-cta-arrow">→</span></button>
+          <p className="lx-price-fine">Sign in with Google to create your private writing space.</p>
+        </div>
+      </InView>
+    </section>
+  );
+}
+
+function Faq() {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <section className="lx-section lx-faq" id="faq">
+      <InView className="lx-head">
+        <p className="lx-eyebrow">Questions</p>
+        <h2 className="lx-h2">Before you <em>begin.</em></h2>
+      </InView>
+      <div className="lx-faq-list">
+        {FAQ.map((f, i) => (
+          <InView key={i} delay={i * 0.04} y={14}>
+            <button className={`lx-faq-q ${open === i ? "open" : ""}`} onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}>
+              {f.q}
+              <motion.span className="lx-faq-ic" animate={{ rotate: open === i ? 45 : 0 }}>+</motion.span>
+            </button>
+            <AnimatePresence initial={false}>
+              {open === i && (
+                <motion.div className="lx-faq-a" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+                  <p>{f.a}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </InView>
+        ))}
+      </div>
+    </section>
   );
 }

@@ -951,6 +951,7 @@ html, body, #root {
 .share-link { background: none; border: none; color: var(--blue-2); font: inherit; font-size: 12.5px; cursor: pointer; }
 .share-link:hover { text-decoration: underline; }
 .share-note { font-size: 12px; color: var(--green); line-height: 1.5; }
+.share-hint { font-size: 12px; color: var(--text-2); line-height: 1.5; margin-top: -4px; }
 
 /* Per-chapter record / upload */
 .ch-rec {
