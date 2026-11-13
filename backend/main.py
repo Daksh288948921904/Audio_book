@@ -129,6 +129,13 @@ if _FRONTEND_DIST.exists():
     if _assets.exists():
         app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
+    _dist_root = _FRONTEND_DIST.resolve()
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
+        # Real files at the top of the build (favicon, touch icon) are served as-is;
+        # everything else is a client-side route.
+        candidate = (_dist_root / full_path).resolve()
+        if full_path and candidate.is_file() and candidate.parent == _dist_root:
+            return FileResponse(str(candidate))
         return FileResponse(str(_FRONTEND_DIST / "index.html"))
