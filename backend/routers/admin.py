@@ -239,7 +239,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "has_text":      has_own_text(c),
             "published_at":  c.published_at,
             "parts":         part_rows(c),
-            "generation_error": pipeline.last_error(c.id) if c.status == "recording" else None,
+            "generation_error": pipeline.last_error(c.id) if c.status != "generating" else None,
             "segment_count": seg_counts.get(c.id, 0),
             "created_at":    c.created_at,
             "finished_at":   c.finished_at,
@@ -267,7 +267,7 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin
         "has_text": has_own_text(chapter),
         "published_at": chapter.published_at,
         "parts": part_rows(chapter),
-        "generation_error": pipeline.last_error(chapter.id) if chapter.status == "recording" else None,
+        "generation_error": pipeline.last_error(chapter.id) if chapter.status != "generating" else None,
         "created_at":    chapter.created_at,
         "finished_at":   chapter.finished_at,
     }
@@ -321,6 +321,24 @@ def compile_book(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
     results.sort(key=lambda r: r["number"])
 
     return {"book_id": book_id, "results": results}
+
+
+@router.post("/chapters/{chapter_id}/rewrite", status_code=202)
+def rewrite_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin):
+    """Write a finished chapter again from the same recordings and text. Runs in the
+    background like a first write; until it finishes the current text stays. Replaces
+    any edits made to the text, and the new version must be sent to the author again."""
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    if chapter.status != "done":
+        raise HTTPException(status_code=400, detail="Only a finished chapter can be rewritten")
+    has_audio = db.query(AudioSegment.id).filter(AudioSegment.chapter_id == chapter_id).first() is not None
+    if not has_audio and not has_own_text(chapter):
+        raise HTTPException(status_code=400, detail="This chapter has no recordings or text of its own to rewrite from")
+    if not pipeline.enqueue(db, [chapter_id]):
+        raise HTTPException(status_code=409, detail="Chapter is already being written")
+    return {"status": "generating"}
 
 
 @router.get("/chapters/{chapter_id}/pdf")

@@ -9,17 +9,24 @@ from backend.services.groq_pool import pool
 
 log = logging.getLogger(__name__)
 
-# Notes per LLM call, in characters (~1 250 tokens). Batches are packed by size,
-# not count — five 10-minute recordings in one call blew past Groq's 12 000 TPM.
-_NOTES_BUDGET = 5000
+# Notes per LLM call, in characters (~600 tokens, about 3 minutes of speech).
+# Small batches are what give a chapter depth: each call expands its notes ~4x, and
+# 5 000-char batches turned 5 minutes of recordings into a 3-page chapter.
+_NOTES_BUDGET = 2500
 
 # Previous-chapter summaries fed into a chapter, in characters (~1 000 tokens).
 # Most recent chapters win when a long book doesn't fit.
 _CONTEXT_BUDGET = 4000
 
-# Tokens to generate per batch (~2–3 pages of prose), including the model's short
-# reasoning. Input + this stays under gpt-oss-120b's 8 000 TPM per key.
-_BATCH_OUTPUT_TOKENS = 2500
+# Tokens to generate per batch (~5–6 pages of prose), including the model's short
+# reasoning. Input (≤ ~2 000 tokens with context) + this stays under gpt-oss-120b's
+# 8 000 TPM per key; the pool rotates keys when one is rate-limited.
+_BATCH_OUTPUT_TOKENS = 5000
+
+# Prose words to aim for per word of notes, and the bounds per batch.
+_EXPANSION = 4
+_MIN_SECTION_WORDS = 900
+_MAX_SECTION_WORDS = 2400
 
 # Seconds to wait between batches to spread load over Groq's per-key TPM (8 000 on
 # gpt-oss-120b). A call is ~5 000 tokens; the pool rotates keys when one is rate-limited.
@@ -126,7 +133,32 @@ def _seg_block(segments: list[dict]) -> str:
     )
 
 
-def generate_chapter(chunks: list[dict], chapter_number: int, lead_in: str = "") -> str:
+def _depth_rules(genre: str, target_words: int) -> str:
+    if genre == "memoir":
+        detail = (
+            "- This is a memoir, told in the author's first-person voice. Go deep with what the notes give you: "
+            "the scene and setting, what the author saw, heard and felt, their thoughts at the time and their "
+            "reflection now, the people involved and why the moment mattered.\n"
+            "- Do NOT invent events, people, names, places, dates or facts the notes don't support."
+        )
+    else:
+        detail = (
+            "- Go deep: dramatise each note as a full scene — setting, sensory detail, dialogue, characters' "
+            "thoughts and motivations, tension and pacing. Show, don't summarise.\n"
+            "- Stay true to the notes: keep their events, characters and order; don't add major plot turns."
+        )
+    return (
+        f"{detail}\n"
+        f"- Length: write about {target_words} words for this section. Never compress several notes into one "
+        "paragraph; it is far better to be rich and detailed than brief."
+    )
+
+
+def _target_words(notes: str) -> int:
+    return max(_MIN_SECTION_WORDS, min(_MAX_SECTION_WORDS, len(notes.split()) * _EXPANSION))
+
+
+def generate_chapter(chunks: list[dict], chapter_number: int, lead_in: str = "", genre: str = "fiction") -> str:
     """lead_in: existing chapter text (e.g. from an uploaded manuscript) that the
     generated prose must continue from rather than open fresh."""
     summaries = [c for c in chunks if c.get("type") == "summary"]
@@ -141,6 +173,8 @@ def generate_chapter(chunks: list[dict], chapter_number: int, lead_in: str = "")
     for idx, batch in enumerate(batches):
         is_first = idx == 0 and not lead_in
         notes = _seg_block(batch)
+        depth = _depth_rules(genre, _target_words(" ".join(seg["text"] for seg in batch)))
+        style = "the author's own first-person memoir voice" if genre == "memoir" else "a literary fiction style"
 
         if is_first:
             prompt = f"""{context_block}AUTHOR'S RAW NOTES FOR THIS CHAPTER (in order):
@@ -155,7 +189,8 @@ Rules:
 - Do NOT include the intent labels in the output.
 - Do NOT add a chapter heading — start directly with prose.
 - Use previous chapters context only for continuity; do not repeat it.
-- Write in a literary fiction style unless the notes suggest otherwise.
+- Write in {style} unless the notes suggest otherwise.
+{depth}
 - Write until you have fully covered every note above.
 
 Begin writing:"""
@@ -177,7 +212,8 @@ Rules:
 - Follow intent labels for tone.
 - Do NOT include intent labels in output.
 - Do NOT add any heading.
-- Maintain the same literary fiction style and narrative voice.
+- Maintain the same voice and style ({style}).
+{depth}
 - Write until you have fully covered every note above.
 
 Continue writing:"""

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { cmsFinishChapter, cmsDownloadPdf, cmsSendChapterEmail, type CmsChapter, type CmsSegment } from "../api/adminClient";
+import { cmsFinishChapter, cmsRewriteChapter, cmsDownloadPdf, cmsSendChapterEmail, type CmsChapter, type CmsSegment } from "../api/adminClient";
 
 const SECTION_ICONS: Record<string, string> = {
   "Dedication": "💌", "Epigraph": "💬", "Foreword": "✍", "Preface": "📝",
@@ -68,7 +68,23 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     try {
       await cmsFinishChapter(chapter.id);
       onUpdated({ ...chapter, status: "generating", generation_error: null });
-    } catch (e) { setError(String(e)); }
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setWriting(false); }
+  }
+
+  // Rewrite a finished chapter from the same recordings/text. The current text stays
+  // until the new one is ready; if writing fails the chapter is left as it was.
+  async function handleRewrite() {
+    const warn = chapter.published_at
+      ? "Rewrite this chapter from its recordings and text?\n\nAny edits made to the text will be replaced, and the new version will need to be sent to the author again."
+      : "Rewrite this chapter from its recordings and text?\n\nAny edits made to the text will be replaced.";
+    if (!window.confirm(warn)) return;
+    setWriting(true);
+    setError(null);
+    try {
+      await cmsRewriteChapter(chapter.id);
+      onUpdated({ ...chapter, status: "generating", generation_error: null });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setWriting(false); }
   }
 
@@ -86,7 +102,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
       const r = await cmsSendChapterEmail(chapter.id);
       setEmailSent(r.to);
       onUpdated({ ...chapter, published_at: r.published_at });
-    } catch (e) { setError(String(e)); }
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setEmailing(false); }
   }
 
@@ -176,7 +192,9 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
 
         {(error || (!isActivelyWriting && chapter.generation_error)) && (
           <div style={{ fontSize: 11, color: "#fb7185", marginTop: 6, lineHeight: 1.4 }}>
-            {error ?? `Last write failed: ${chapter.generation_error} — click Write to try again.`}
+            {error ?? (chapter.status === "done"
+              ? `Rewrite failed: ${chapter.generation_error} — the chapter was left as it was. Click Rewrite to try again.`
+              : `Last write failed: ${chapter.generation_error} — click Write to try again.`)}
           </div>
         )}
       </div>
@@ -196,6 +214,12 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
               <button className="adm-btn adm-btn-pdf" onClick={handlePdf}>
                 ↓ PDF
               </button>
+              {(segments.length > 0 || chapter.has_text) && (
+                <button className="adm-btn adm-btn-view" onClick={handleRewrite} disabled={writing}
+                        title="Write this chapter again, in more depth, from the same recordings and text">
+                  ↻ Rewrite
+                </button>
+              )}
               <button
                 className="adm-btn adm-btn-write"
                 onClick={handleSendEmail}

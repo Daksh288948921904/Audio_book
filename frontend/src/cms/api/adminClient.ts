@@ -10,7 +10,13 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> 
     ...init,
     headers: { ...authHeaders(), ...(init.headers as Record<string, string> ?? {}) },
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    let msg = body;
+    try { const d = JSON.parse(body).detail; if (typeof d === "string") msg = d; } catch { /* not JSON */ }
+    if (!msg || msg.trimStart().startsWith("<")) msg = `Something went wrong (error ${res.status}).`;
+    throw new Error(msg);
+  }
   return res;
 }
 
@@ -127,6 +133,10 @@ export async function cmsGetChapter(chapterId: number): Promise<CmsChapter> {
 }
 
 // Queues the chapter; it's written in the background — poll until status leaves "generating".
+export async function cmsRewriteChapter(chapterId: number): Promise<{ status: string }> {
+  return (await apiFetch(`/admin/chapters/${chapterId}/rewrite`, { method: "POST" })).json();
+}
+
 export async function cmsFinishChapter(chapterId: number): Promise<{ status: string }> {
   return (await apiFetch(`/chapters/${chapterId}/finish`, { method: "POST" })).json();
 }

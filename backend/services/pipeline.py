@@ -172,7 +172,7 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
             # Earlier chapters' summaries go with the chapter's first recordings only.
             context = summaries if not any(p[2] for p in parts[:i]) else []
             first_call = False
-            prose = llm.generate_chapter(context + part_segs, number, lead_in="\n\n".join(pieces))
+            prose = llm.generate_chapter(context + part_segs, number, lead_in="\n\n".join(pieces), genre=genre)
             if prose:
                 pieces.append(prose)
     generated_text = "\n\n".join(pieces)
@@ -193,6 +193,7 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
             chapter.summary = summary
             chapter.status = "done"
             chapter.finished_at = datetime.now(timezone.utc)
+            chapter.published_at = None  # new text: the CMS sends this version to the author again
             db.commit()
             break
         except ChapterGone:
@@ -231,6 +232,7 @@ _errors: dict[int, str] = {}
 
 
 _claimed: set[int] = set()  # being queued by enqueue() right now
+_prev_status: dict[int, str] = {}  # status before queueing — restored if writing fails
 
 
 def _busy_locked(chapter_id: int) -> bool:
@@ -253,11 +255,15 @@ def enqueue(db: Session, chapter_ids: list[int]) -> list[int]:
     Never touches the DB while holding _queue_lock: an ORM attribute read after a
     commit reloads, and waiting for a pooled connection inside the lock deadlocked
     every request that checks is_busy() (each holding a connection) under load."""
-    info = [(ch.id, ch.book_id or 0, ch.number)
-            for ch in db.query(Chapter).filter(Chapter.id.in_(chapter_ids)).all()]
+    rows = db.query(Chapter).filter(Chapter.id.in_(chapter_ids)).all()
+    info = [(ch.id, ch.book_id or 0, ch.number) for ch in rows]
+    before = {ch.id: ch.status for ch in rows}
     with _queue_lock:  # claim atomically, so two requests can't both queue a chapter
         queued = [cid for cid, _, _ in info if not _busy_locked(cid)]
         _claimed.update(queued)
+        for cid in queued:
+            if before[cid] != "generating":  # a resumed job keeps its original "before"
+                _prev_status[cid] = before[cid]
     try:
         if queued:
             db.query(Chapter).filter(Chapter.id.in_(queued)).update(
@@ -316,10 +322,13 @@ def _run_one(chapter_id: int) -> None:
         db.rollback()
         ch = db.query(Chapter).filter(Chapter.id == chapter_id).first()
         if ch and ch.status == "generating":
-            ch.status = "recording"
+            # A failed rewrite leaves the chapter as it was ("done", old text intact).
+            prev = _prev_status.get(chapter_id, "recording")
+            ch.status = prev if prev == "done" and ch.generated_text else "recording"
             db.commit()
     finally:
         db.close()
+        _prev_status.pop(chapter_id, None)
 
 
 def resume_interrupted() -> None:
