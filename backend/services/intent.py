@@ -1,3 +1,5 @@
+import logging
+
 from backend.config import GROQ_INTENT_MODEL
 from backend.services.groq_pool import pool
 
@@ -21,10 +23,22 @@ _LABELS_STR = ", ".join(CANDIDATE_LABELS)
 _MAX_CHARS = 4000
 
 
+log = logging.getLogger(__name__)
+
+
 def classify_intent(text: str) -> str:
+    """Tone label for a transcript. Falls back to "informational" on any API trouble:
+    by now the recording is transcribed, and a tone hint isn't worth failing the upload."""
     if not text.strip():
         return "informational"
+    try:
+        return _classify(text)
+    except Exception:
+        log.warning("intent: classification failed, using 'informational'", exc_info=True)
+        return "informational"
 
+
+def _classify(text: str) -> str:
     result = pool.chat(
         model=GROQ_INTENT_MODEL,
         messages=[

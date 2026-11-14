@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.db import init_db, get_db, SessionLocal, AudioSegment, User
+from backend.db import init_db, get_db, SessionLocal, AudioSegment, User, REQUEST_THREADS
 from backend.routers import audio, chapters, books, admin as admin_router
 from backend.config import ADMIN_EMAILS, CORS_ORIGINS
 from backend.auth import verify_google_token, create_app_token, get_current_user
@@ -62,6 +62,9 @@ async def _audio_cleanup_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Sync endpoints share this threadpool; keep it within the DB pool (see db.py).
+    import anyio.to_thread
+    anyio.to_thread.current_default_thread_limiter().total_tokens = REQUEST_THREADS
     init_db()
     # Chapters a deploy/restart interrupted mid-write go back in the queue.
     from backend.services.pipeline import resume_interrupted
@@ -76,6 +79,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AudioBook API", version="2.0.0", lifespan=lifespan)
 
+# Added first so it sits inside CORS: its 413/503 replies still carry CORS headers.
+app.add_middleware(audio.UploadGate)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -118,7 +123,7 @@ def auth_me(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/health")
-def health():
+async def health():  # async: answers even when every request thread is busy
     return {"status": "ok"}
 
 

@@ -1,3 +1,5 @@
+import os
+import re
 from datetime import datetime, timezone
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -6,9 +8,29 @@ from backend.config import DATABASE_URL
 # SQLite needs check_same_thread=False; PostgreSQL does not accept it
 _is_sqlite = DATABASE_URL.startswith("sqlite")
 _engine_kwargs: dict = {"pool_pre_ping": True}
-# Default 5+10 ran out under load (40 request threads + background jobs) → 500s after 30 s.
-# 30 total stays well inside Supabase's direct-connection limit.
-_engine_kwargs.update(pool_size=10, max_overflow=20)
+REQUEST_THREADS = 30  # main.py caps the request threadpool at this
+
+
+def _pool_size(url: str) -> tuple[int, int]:
+    """(pool_size, max_overflow). DB_POOL_SIZE / DB_MAX_OVERFLOW override.
+
+    Supabase's session-mode pooler (pooler.supabase.com:5432) refuses clients past its
+    pool size (15 on small plans: "EMAXCONNSESSION max clients reached"), and during a
+    Render deploy the old and new instance share that limit — so stay at 6 there and let
+    threads wait their turn (queries take milliseconds; nothing holds a connection
+    across slow work). Direct connections and the transaction pooler (:6543) take many
+    more, so size to every thread that can hold a session at once: REQUEST_THREADS +
+    3 generation + 4 upload workers + manuscript jobs."""
+    if os.getenv("DB_POOL_SIZE"):
+        return int(os.environ["DB_POOL_SIZE"]), int(os.getenv("DB_MAX_OVERFLOW", "0"))
+    if "pooler.supabase.com" in url and not re.search(r":6543(/|$)", url):
+        return 3, 3
+    return 10, 30
+
+
+_size, _overflow = _pool_size(DATABASE_URL)
+_engine_kwargs.update(pool_size=_size, max_overflow=_overflow, pool_timeout=60,
+                      pool_recycle=300)  # poolers drop idle connections; don't hand out dead ones
 if _is_sqlite:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
@@ -199,7 +221,12 @@ def _sqlite_migrate():
             conn.commit()
 
 
-def get_db():
+async def get_db():
+    # Async on purpose. FastAPI runs a sync dependency's cleanup on a request thread,
+    # after the response. With every thread busy waiting for a connection, a finished
+    # request then can't get a thread to hand its connection back: the pool locks up
+    # until waits time out (seen with Supabase's 6-connection session pooler under load).
+    # Opening a Session doesn't connect, and close() just returns the connection.
     db = SessionLocal()
     try:
         yield db

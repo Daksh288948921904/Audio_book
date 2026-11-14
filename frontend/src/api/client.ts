@@ -78,20 +78,20 @@ export async function loginWithGoogle(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ credential }),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
 export async function getMe(): Promise<{ sub: string; email: string; name: string; is_admin: boolean }> {
   const res = await fetch(`${BASE}/auth/me`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
 // ── Books ─────────────────────────────────────────────────────────────────────
 export async function listBooks(): Promise<Book[]> {
   const res = await fetch(`${BASE}/books/`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -100,7 +100,7 @@ export async function createBook(title: string, genre: "fiction" | "memoir" = "f
     method: "POST",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -109,7 +109,7 @@ export async function deleteBook(id: number): Promise<void> {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 export async function clearAll(): Promise<void> {
@@ -117,12 +117,12 @@ export async function clearAll(): Promise<void> {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 export async function listBookChapters(bookId: number): Promise<Chapter[]> {
   const res = await fetch(`${BASE}/books/${bookId}/chapters`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -139,7 +139,7 @@ export async function createBookChapters(
     method: "POST",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -164,7 +164,7 @@ export async function uploadManuscript(
 // ── Chapters ──────────────────────────────────────────────────────────────────
 export async function getChapter(id: number): Promise<Chapter> {
   const res = await fetch(`${BASE}/chapters/${id}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -173,7 +173,7 @@ export async function finishChapter(id: number): Promise<{ status: string; gener
     method: "POST",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -182,7 +182,7 @@ export async function updateChapterTitle(id: number, title: string): Promise<voi
     `${BASE}/chapters/${id}/title?title=${encodeURIComponent(title)}`,
     { method: "PATCH", headers: authHeaders() }
   );
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 export async function updateChapterText(id: number, text: string): Promise<void> {
@@ -191,7 +191,7 @@ export async function updateChapterText(id: number, text: string): Promise<void>
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ text }),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 export async function deleteChapter(id: number): Promise<void> {
@@ -199,7 +199,7 @@ export async function deleteChapter(id: number): Promise<void> {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 export async function reopenChapter(id: number): Promise<void> {
@@ -207,20 +207,29 @@ export async function reopenChapter(id: number): Promise<void> {
     method: "PATCH",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 // ── Audio / Segments ──────────────────────────────────────────────────────────
 export async function uploadAudio(chapterId: number, file: File, partId?: number | null): Promise<Segment> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${BASE}/audio/upload/${chapterId}${partQuery(partId)}`, {
-    method: "POST",
-    headers: authHeaders(), // auth only — browser sets Content-Type for FormData
-    body: form,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  // 503 = the server is processing lots of recordings; wait and try again a few times
+  // rather than make the author re-upload.
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${BASE}/audio/upload/${chapterId}${partQuery(partId)}`, {
+      method: "POST",
+      headers: authHeaders(), // auth only — browser sets Content-Type for FormData
+      body: form,
+    });
+    if (res.status === 503 && attempt < 4) {
+      const wait = Number(res.headers.get("Retry-After")) || 30;
+      await new Promise((r) => setTimeout(r, wait * 1000));
+      continue;
+    }
+    if (!res.ok) throw new Error(await errorDetail(res));
+    return res.json();
+  }
 }
 
 export async function uploadChapterPdf(chapterId: number, file: File, partId?: number | null): Promise<{ pdf_filename: string; pages: number; words: number }> {
@@ -264,14 +273,23 @@ export async function removeChapterPart(chapterId: number, partId: number): Prom
   return (await res.json()).parts;
 }
 
+// A readable message for a failed response: the API's `detail`, or a plain sentence
+// when the body isn't ours (proxy error page during a deploy, etc.).
 async function errorDetail(res: Response): Promise<string> {
-  const body = await res.text();
-  try { return JSON.parse(body).detail ?? body; } catch { return body; }
+  const body = await res.text().catch(() => "");
+  try {
+    const detail = JSON.parse(body).detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) return detail.map((d) => d?.msg ?? String(d)).join("; ");
+  } catch { /* not JSON */ }
+  if ([502, 503, 504].includes(res.status)) return "The server is busy or restarting — please try again in a minute.";
+  if (res.status === 413) return "That file is too large.";
+  return body && body.length < 300 && !body.trimStart().startsWith("<") ? body : `Something went wrong (error ${res.status}).`;
 }
 
 export async function getSegments(chapterId: number): Promise<Segment[]> {
   const res = await fetch(`${BASE}/audio/segments/${chapterId}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -281,7 +299,7 @@ export async function reorderSegments(chapterId: number, segmentIds: number[]): 
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ chapter_id: chapterId, segment_ids: segmentIds }),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 export async function moveSegment(segmentId: number, targetChapterId: number): Promise<Segment> {
@@ -290,7 +308,7 @@ export async function moveSegment(segmentId: number, targetChapterId: number): P
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ target_chapter_id: targetChapterId }),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
 }
 
@@ -299,7 +317,7 @@ export async function deleteSegment(segmentId: number): Promise<void> {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await errorDetail(res));
 }
 
 export async function fetchAudioBlob(segmentId: number): Promise<string | null> {

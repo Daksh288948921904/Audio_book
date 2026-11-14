@@ -53,11 +53,14 @@ def get_current_user(
         )
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
+        email = payload.get("email", "")
         return {
             "sub":      payload["sub"],
-            "email":    payload.get("email", ""),
+            "email":    email,
             "name":     payload.get("name", ""),
-            "is_admin": payload.get("is_admin", False),
+            # Checked against the live list, not the 30-day token, so removing
+            # someone from ADMIN_EMAILS takes effect on the next request.
+            "is_admin": bool(payload.get("is_admin")) and email in ADMIN_EMAILS,
         }
     except JWTError:
         raise HTTPException(

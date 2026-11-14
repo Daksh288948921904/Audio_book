@@ -51,7 +51,11 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 
 # --- Auth ---
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-JWT_SECRET       = os.getenv("JWT_SECRET", "change-this-secret-in-production")
+_DEFAULT_JWT_SECRET = "change-this-secret-in-production"
+JWT_SECRET       = os.getenv("JWT_SECRET", _DEFAULT_JWT_SECRET)
+# With the public default anyone could mint an admin token. Local SQLite dev may use it.
+if JWT_SECRET == _DEFAULT_JWT_SECRET and not DATABASE_URL.startswith("sqlite"):
+    raise RuntimeError("JWT_SECRET is not set — refusing to start with the default secret")
 JWT_EXPIRE_DAYS  = int(os.getenv("JWT_EXPIRE_DAYS", "30"))
 
 # --- Admin ---

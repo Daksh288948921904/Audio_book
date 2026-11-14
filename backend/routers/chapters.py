@@ -1,4 +1,3 @@
-import os
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -8,7 +7,6 @@ from starlette.concurrency import run_in_threadpool
 from backend.db import get_db, Book, Chapter, ChapterPart, AudioSegment
 from backend.services import pipeline, manuscript
 from backend.routers.audio import delete_segment_files
-from backend.services.vector_store import delete_collection
 from backend.auth import get_current_user, require_admin
 
 router = APIRouter(prefix="/chapters", tags=["chapters"])
@@ -20,49 +18,9 @@ class TextUpdate(BaseModel):
     text: str
 
 
-@router.post("/bulk")
-def create_chapters_bulk(count: int, db: Session = Depends(get_db), _: dict = _auth):
-    if count < 1 or count > 50:
-        raise HTTPException(status_code=400, detail="count must be 1–50")
-    last = db.query(Chapter).order_by(Chapter.number.desc()).first()
-    start = (last.number + 1) if last else 1
-    created = []
-    for i in range(count):
-        ch = Chapter(number=start + i, status="recording")
-        db.add(ch)
-        created.append(ch)
-    db.commit()
-    for ch in created:
-        db.refresh(ch)
-    return [{"id": c.id, "number": c.number, "title": c.title, "status": c.status} for c in created]
-
-
-@router.post("/")
-def create_chapter(title: str | None = None, db: Session = Depends(get_db), _: dict = _auth):
-    last = db.query(Chapter).order_by(Chapter.number.desc()).first()
-    number = (last.number + 1) if last else 1
-    chapter = Chapter(number=number, title=title, status="recording")
-    db.add(chapter)
-    db.commit()
-    db.refresh(chapter)
-    return {"id": chapter.id, "number": chapter.number, "title": chapter.title, "status": chapter.status}
-
-
-@router.get("/")
-def list_chapters(db: Session = Depends(get_db), _: dict = _auth):
-    chapters = db.query(Chapter).order_by(Chapter.number).all()
-    return [
-        {"id": c.id, "number": c.number, "title": c.title, "status": c.status,
-         "created_at": c.created_at, "finished_at": c.finished_at}
-        for c in chapters
-    ]
-
-
 @router.get("/{chapter_id}")
-def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+def get_chapter(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
+    chapter = owned_chapter(db, chapter_id, user)
     return {
         "id": chapter.id, "number": chapter.number, "title": chapter.title,
         "status": chapter.status, "generated_text": chapter.generated_text,
@@ -75,6 +33,10 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth)
         "finished_at": chapter.finished_at,
     }
 
+
+MAX_TITLE_CHARS = 200
+# Generated/edited chapter text. Several parts of 150k each can legitimately add up.
+_MAX_GENERATED_CHARS = 2_000_000
 
 _MAX_CHAPTER_PDF_BYTES = 20 * 1024 * 1024
 # ~25k words — a long chapter. A whole book belongs in the book-level manuscript upload.
@@ -107,13 +69,26 @@ def _target(db: Session, chapter: Chapter, part_id: int | None):
     return part
 
 
-def _own_recording_chapter(db: Session, chapter_id: int, user: dict) -> Chapter:
+def owned_chapter(db: Session, chapter_id: int, user: dict) -> Chapter:
+    """The chapter, if it belongs to one of this user's books (admins may open any).
+    Someone else's chapter looks the same as a missing one."""
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if chapter and not user.get("is_admin"):
+        book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
+        if not book or book.user_id != user["sub"]:
+            chapter = None
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
-    book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
-    if book and book.user_id != user["sub"] and not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Not your book")
+    return chapter
+
+
+def _not_generating(chapter: Chapter) -> None:
+    if chapter.status == "generating" or pipeline.is_busy(chapter.id):
+        raise HTTPException(status_code=409, detail="This chapter is being written right now — try again when it's done")
+
+
+def _own_recording_chapter(db: Session, chapter_id: int, user: dict) -> Chapter:
+    chapter = owned_chapter(db, chapter_id, user)
     if chapter.status != "recording":
         raise HTTPException(status_code=400, detail="Chapter is not in recording state")
     return chapter
@@ -231,12 +206,7 @@ def finish(chapter_id: int, db: Session = Depends(get_db), _: dict = Depends(req
 
 @router.get("/{chapter_id}/pdf")
 def download_pdf(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
-    if book and book.user_id != user["sub"] and not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Not your book")
+    chapter = owned_chapter(db, chapter_id, user)
     if chapter.status != "done" or not chapter.generated_text:
         raise HTTPException(status_code=400, detail="Chapter not yet generated")
     from backend.services.pdf import generate_pdf
@@ -251,10 +221,10 @@ def download_pdf(chapter_id: int, db: Session = Depends(get_db), user: dict = _a
 
 
 @router.patch("/{chapter_id}/text")
-def update_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db), _: dict = _auth):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+def update_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db), user: dict = _auth):
+    chapter = owned_chapter(db, chapter_id, user)
+    if len(body.text) > _MAX_GENERATED_CHARS:
+        raise HTTPException(status_code=413, detail="This is too long for one chapter")
     if chapter.status != "done":
         raise HTTPException(status_code=400, detail="Chapter not yet generated")
     chapter.generated_text = body.text
@@ -265,25 +235,21 @@ def update_text(chapter_id: int, body: TextUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{chapter_id}")
-def delete_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    segments = db.query(AudioSegment).filter(AudioSegment.chapter_id == chapter_id).all()
-    for seg in segments:
-        if seg.filename and os.path.exists(seg.filename):
-            os.remove(seg.filename)
-    delete_collection(chapter.number)
+def delete_chapter(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
+    chapter = owned_chapter(db, chapter_id, user)
+    for seg in db.query(AudioSegment).filter(AudioSegment.chapter_id == chapter_id).all():
+        delete_segment_files(chapter, seg)
     db.delete(chapter)
     db.commit()
     return {"status": "deleted", "chapter_id": chapter_id}
 
 
 @router.patch("/{chapter_id}/reopen")
-def reopen_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _auth):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+def reopen_chapter(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
+    chapter = owned_chapter(db, chapter_id, user)
+    # Reopening mid-write would let the finished job flip it back to "done" and
+    # silently drop whatever the author adds meanwhile.
+    _not_generating(chapter)
     chapter.status = "recording"
     chapter.finished_at = None
     chapter.published_at = None  # the text will change; the CMS sends the new version again
@@ -292,10 +258,11 @@ def reopen_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _au
 
 
 @router.patch("/{chapter_id}/title")
-def update_title(chapter_id: int, title: str, db: Session = Depends(get_db), _: dict = _auth):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    chapter.title = title
+def update_title(chapter_id: int, title: str, db: Session = Depends(get_db), user: dict = _auth):
+    chapter = owned_chapter(db, chapter_id, user)
+    title = " ".join(title.split())  # no newlines/tabs (they end up in PDF headers and filenames)
+    if len(title) > MAX_TITLE_CHARS:
+        raise HTTPException(status_code=422, detail=f"Title must be at most {MAX_TITLE_CHARS} characters")
+    chapter.title = title or None
     db.commit()
     return {"id": chapter.id, "title": chapter.title}

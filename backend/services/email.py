@@ -1,4 +1,5 @@
 import base64
+import html as _html
 import logging
 import os
 from email.utils import parseaddr
@@ -35,6 +36,8 @@ def send_chapter_ready(
 
     safe = "".join(c for c in chapter_title if c.isalnum() or c in " _-").strip() or "chapter"
 
+    # Titles and names are user-typed; escape them for the HTML body only.
+    e_book, e_name, e_chapter = (_html.escape(v) for v in (book_title, display_name, chapter_title))
     html = f"""<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background:#0d0d1a;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;">
@@ -45,15 +48,15 @@ def send_chapter_ready(
         <tr>
           <td style="background:linear-gradient(135deg,#4c1d95,#6d28d9,#8b5cf6);padding:36px 40px;">
             <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.7);letter-spacing:0.5px;text-transform:uppercase;">AudioBook Studio</p>
-            <h1 style="margin:8px 0 0;font-size:26px;font-weight:800;color:#fff;">&#128218; {book_title}</h1>
+            <h1 style="margin:8px 0 0;font-size:26px;font-weight:800;color:#fff;">&#128218; {e_book}</h1>
           </td>
         </tr>
 
         <tr>
           <td style="padding:36px 40px;">
-            <p style="margin:0 0 12px;font-size:16px;color:#c4c4e0;">Hi {display_name},</p>
+            <p style="margin:0 0 12px;font-size:16px;color:#c4c4e0;">Hi {e_name},</p>
             <p style="margin:0 0 20px;font-size:15px;color:#9090b8;line-height:1.6;">
-              Your chapter <strong style="color:#eaeaf8;">"{chapter_title}"</strong> has been written from
+              Your chapter <strong style="color:#eaeaf8;">"{e_chapter}"</strong> has been written from
               your voice recordings and is attached to this email as a PDF.
             </p>
             <div style="background:#1a1a35;border:1px solid #2e2e55;border-radius:10px;padding:20px 24px;margin-bottom:24px;">

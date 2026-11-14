@@ -41,7 +41,7 @@ def generate_pdf(chapter_number: int, title: str | None, text: str, display_numb
     heading = heading_full  # kept for local reference
 
     pdf.set_font("Helvetica", "B", 22)
-    pdf.cell(0, 14, heading_full, ln=True, align="C")
+    pdf.multi_cell(0, 12, heading_full, align="C")  # wraps long titles instead of running off the page
     pdf.ln(10)
 
     # Divider

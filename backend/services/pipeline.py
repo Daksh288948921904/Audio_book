@@ -61,15 +61,18 @@ def save_segment(db: Session, chapter: Chapter, audio_path: str, transcript: str
     db.commit()
     db.refresh(segment)
 
-    # Store in this chapter's Qdrant collection
-    vector_store.ensure_collection(chapter.number)
-    vector_store.add_chunk(
-        chapter_number=chapter.number,
-        text=transcript,
-        intent=intent_label,
-        chunk_type="segment",
-        segment_id=segment.id,
-    )
+    # Store in this chapter's Qdrant collection. Generation reads the DB, not Qdrant,
+    # so an outage there must not fail an upload whose segment is already saved.
+    try:
+        vector_store.add_chunk(
+            chapter_number=chapter.number,
+            text=transcript,
+            intent=intent_label,
+            chunk_type="segment",
+            segment_id=segment.id,
+        )
+    except Exception:
+        log.warning("vector store: chunk for segment %s not stored", segment.id, exc_info=True)
 
     return segment
 
@@ -96,8 +99,14 @@ def finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
             _active_generations.discard(chapter_id)
 
 
+class ChapterGone(Exception):
+    """The chapter was deleted (or its book was) while it was queued or being written."""
+
+
 def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if chapter is None:
+        raise ChapterGone()
     chapter.status = "generating"
     db.commit()
 
@@ -172,11 +181,27 @@ def _do_finish_chapter(db: Session, chapter_id: int) -> tuple[str, bytes]:
     summary = llm.summarize_chapter(generated_text, number)
 
     # Persist. Parts keep their PDF/text, so a re-record rewrites the chapter in the same order.
-    chapter.generated_text = generated_text
-    chapter.summary = summary
-    chapter.status = "done"
-    chapter.finished_at = datetime.now(timezone.utc)
-    db.commit()
+    # Retried: a DB blip here would throw away minutes of finished writing.
+    for attempt in range(4):
+        try:
+            db.rollback()
+            db.expire_all()
+            chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+            if chapter is None:
+                raise ChapterGone()
+            chapter.generated_text = generated_text
+            chapter.summary = summary
+            chapter.status = "done"
+            chapter.finished_at = datetime.now(timezone.utc)
+            db.commit()
+            break
+        except ChapterGone:
+            raise
+        except Exception:
+            if attempt == 3:
+                raise
+            log.warning("generation: saving chapter %d failed, retrying", chapter_id, exc_info=True)
+            time.sleep(5 * (attempt + 1))
 
     disp_num = _display_number(chapter, db)
     pdf_bytes = generate_pdf(chapter.number, chapter.title, generated_text, display_number=disp_num)
@@ -205,9 +230,17 @@ _running: set[int] = set()
 _errors: dict[int, str] = {}
 
 
+_claimed: set[int] = set()  # being queued by enqueue() right now
+
+
+def _busy_locked(chapter_id: int) -> bool:
+    return (chapter_id in _running or chapter_id in _claimed
+            or any(chapter_id in q for q in _book_queues.values()))
+
+
 def is_busy(chapter_id: int) -> bool:
     with _queue_lock:
-        return chapter_id in _running or any(chapter_id in q for q in _book_queues.values())
+        return _busy_locked(chapter_id)
 
 
 def last_error(chapter_id: int) -> str | None:
@@ -215,26 +248,36 @@ def last_error(chapter_id: int) -> str | None:
 
 
 def enqueue(db: Session, chapter_ids: list[int]) -> list[int]:
-    """Mark chapters 'generating' and queue them. Returns the ids actually queued."""
-    queued: list[int] = []
+    """Mark chapters 'generating' and queue them. Returns the ids actually queued.
+
+    Never touches the DB while holding _queue_lock: an ORM attribute read after a
+    commit reloads, and waiting for a pooled connection inside the lock deadlocked
+    every request that checks is_busy() (each holding a connection) under load."""
+    info = [(ch.id, ch.book_id or 0, ch.number)
+            for ch in db.query(Chapter).filter(Chapter.id.in_(chapter_ids)).all()]
+    with _queue_lock:  # claim atomically, so two requests can't both queue a chapter
+        queued = [cid for cid, _, _ in info if not _busy_locked(cid)]
+        _claimed.update(queued)
+    try:
+        if queued:
+            db.query(Chapter).filter(Chapter.id.in_(queued)).update(
+                {"status": "generating"}, synchronize_session=False)
+            db.commit()
+    except Exception:
+        with _queue_lock:
+            _claimed.difference_update(queued)
+        raise
     start: list[int] = []
-    chapters = db.query(Chapter).filter(Chapter.id.in_(chapter_ids)).all()
-    for ch in chapters:
-        if is_busy(ch.id):
-            continue
-        ch.status = "generating"
-        _errors.pop(ch.id, None)
-        queued.append(ch.id)
-    db.commit()
     with _queue_lock:
-        for ch in chapters:
-            if ch.id not in queued:
+        _claimed.difference_update(queued)
+        for cid, key, number in info:
+            if cid not in queued:
                 continue
-            key = ch.book_id or 0
+            _errors.pop(cid, None)
             if key not in _book_queues:
                 _book_queues[key] = {}
                 start.append(key)
-            _book_queues[key][ch.id] = ch.number
+            _book_queues[key][cid] = number
     for key in start:
         threading.Thread(target=_book_worker, args=(key,), daemon=True, name=f"gen-book-{key}").start()
     return queued
@@ -265,6 +308,8 @@ def _run_one(chapter_id: int) -> None:
     try:
         finish_chapter(db, chapter_id)
         log.info("generation: chapter %d done", chapter_id)
+    except ChapterGone:
+        log.info("generation: chapter %d was deleted meanwhile — dropped", chapter_id)
     except Exception as exc:
         log.exception("generation: chapter %d failed", chapter_id)
         _errors[chapter_id] = str(exc) or exc.__class__.__name__

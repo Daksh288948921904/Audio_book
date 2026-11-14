@@ -2,7 +2,7 @@ import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance, VectorParams, PointStruct,
-    Filter, FieldCondition, MatchValue, FilterSelector,
+    Filter, FieldCondition, MatchValue, MatchAny, FilterSelector,
     PayloadSchemaType,
 )
 from fastembed import TextEmbedding
@@ -97,6 +97,23 @@ def delete_chunk_by_segment(chapter_number: int, segment_id: int) -> None:
     ]
     if ids_to_delete:
         client.delete(collection_name=name, points_selector=ids_to_delete)
+
+
+def delete_segments(chapter_number: int, segment_ids: list[int]) -> None:
+    """Remove these recordings' points. Collections are shared by every book's chapter N,
+    so never drop a whole collection on behalf of one book."""
+    if not segment_ids:
+        return
+    client = _get_client()
+    name = collection_name(chapter_number)
+    if name not in [c.name for c in client.get_collections().collections]:
+        return
+    client.delete(
+        collection_name=name,
+        points_selector=FilterSelector(filter=Filter(must=[
+            FieldCondition(key="segment_id", match=MatchAny(any=segment_ids)),
+        ])),
+    )
 
 
 def delete_collection(chapter_number: int) -> None:

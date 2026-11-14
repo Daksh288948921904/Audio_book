@@ -30,7 +30,7 @@ export default function AssignModal({ blob, filename, chapters, segmentCounts, o
       const seg = await uploadAudio(chapterId, file);
       onAssigned(chapterId, seg);
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : String(e));
       setUploading(null);
     }
   }

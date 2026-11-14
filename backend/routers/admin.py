@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.db import get_db, User, Book, Chapter, AudioSegment
@@ -14,7 +15,7 @@ from backend.services import pipeline
 from backend.services.pipeline import _display_number
 from backend.services.pdf import generate_pdf
 from backend.services import storage, manuscript
-from backend.routers.books import manuscript_info
+from backend.routers.books import manuscript_info, chapter_counts
 from backend.routers.chapters import has_own_text, part_rows
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -85,16 +86,19 @@ def _concat_wavs(wav_bytes_list: list[bytes]) -> bytes:
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), _: dict = _admin):
     users = db.query(User).order_by(User.created_at.desc()).all()
+    titles: dict[str, list[str]] = {}
+    for uid, title in db.query(Book.user_id, Book.title).order_by(Book.created_at).all():
+        titles.setdefault(uid, []).append(title)
     result = []
     for u in users:
-        books = db.query(Book).filter(Book.user_id == u.google_id).all()
+        books = titles.get(u.google_id, [])
         result.append({
             "id":         u.id,
             "google_id":  u.google_id,
             "name":       u.name,
             "email":      u.email,
             "book_count": len(books),
-            "book_titles": [b.title for b in books],
+            "book_titles": books,
             "created_at": u.created_at,
         })
     return result
@@ -117,7 +121,8 @@ def search(q: str = "", db: Session = Depends(get_db), _: dict = _admin):
         .limit(10)
         .all()
     )
-    user_map = {u.google_id: u for u in db.query(User).all()}
+    owner_ids = {b.user_id for b in books if b.user_id}
+    user_map = {u.google_id: u for u in db.query(User).filter(User.google_id.in_(owner_ids)).all()} if owner_ids else {}
     return {
         "users": [{"google_id": u.google_id, "name": u.name, "email": u.email} for u in users],
         "books": [
@@ -142,14 +147,15 @@ def list_user_books(google_id: str, db: Session = Depends(get_db), _: dict = _ad
         .order_by(Book.created_at)
         .all()
     )
+    counts = chapter_counts(db, [b.id for b in books])
     return [
         {
             "id":            b.id,
             "title":         b.title,
             "genre":         b.genre or "fiction",
             "created_at":    b.created_at,
-            "chapter_count": len(b.chapters),
-            "done_count":    sum(1 for c in b.chapters if c.status == "done"),
+            "chapter_count": counts.get(b.id, (0, 0))[0],
+            "done_count":    counts.get(b.id, (0, 0))[1],
             **manuscript_info(b),
         }
         for b in books
@@ -216,6 +222,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
         .order_by(Chapter.number)
         .all()
     )
+    seg_counts = _segment_counts(db, [c.id for c in chapters])
     return [
         {
             "id":            c.id,
@@ -233,7 +240,7 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "published_at":  c.published_at,
             "parts":         part_rows(c),
             "generation_error": pipeline.last_error(c.id) if c.status == "recording" else None,
-            "segment_count": db.query(AudioSegment).filter(AudioSegment.chapter_id == c.id).count(),
+            "segment_count": seg_counts.get(c.id, 0),
             "created_at":    c.created_at,
             "finished_at":   c.finished_at,
         }
@@ -266,6 +273,21 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin
     }
 
 
+def _chapters_with_audio(db: Session, chapter_ids: list[int]) -> set[int]:
+    if not chapter_ids:
+        return set()
+    rows = db.query(AudioSegment.chapter_id).filter(AudioSegment.chapter_id.in_(chapter_ids)).distinct().all()
+    return {r[0] for r in rows}
+
+
+def _segment_counts(db: Session, chapter_ids: list[int]) -> dict[int, int]:
+    if not chapter_ids:
+        return {}
+    rows = (db.query(AudioSegment.chapter_id, func.count(AudioSegment.id))
+            .filter(AudioSegment.chapter_id.in_(chapter_ids)).group_by(AudioSegment.chapter_id).all())
+    return dict(rows)
+
+
 @router.post("/books/{book_id}/compile")
 def compile_book(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
     """Sequentially finish all 'recording' chapters with segments for a book."""
@@ -284,9 +306,9 @@ def compile_book(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
     # chapter gets the previous one's summary as context.
     results = []
     to_queue = []
+    with_audio = _chapters_with_audio(db, [ch.id for ch in chapters])
     for ch in chapters:
-        seg_count = db.query(AudioSegment).filter(AudioSegment.chapter_id == ch.id).count()
-        if seg_count == 0 and not has_own_text(ch):
+        if ch.id not in with_audio and not has_own_text(ch):
             results.append({"chapter_id": ch.id, "number": ch.number, "status": "skipped", "reason": "nothing added yet"})
         else:
             to_queue.append(ch)

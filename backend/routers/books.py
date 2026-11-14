@@ -1,14 +1,19 @@
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from backend.db import get_db, Book, Chapter, AudioSegment
-from backend.services.vector_store import delete_collection
+from backend.db import get_db, Book, Chapter
+import logging
+
+from backend.services import storage, vector_store
 from backend.services import manuscript
 from backend.auth import get_current_user
-from backend.routers.chapters import part_rows
+from backend.routers.chapters import part_rows, MAX_TITLE_CHARS
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -46,12 +51,60 @@ def _chapter_row(c: Chapter) -> dict:
 _MAX_PDF_BYTES = 50 * 1024 * 1024
 
 
+def chapter_counts(db: Session, book_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """{book_id: (chapters, done)} in one query — without loading every chapter's text."""
+    if not book_ids:
+        return {}
+    rows = (
+        db.query(Chapter.book_id, func.count(Chapter.id),
+                 func.sum(case((Chapter.status == "done", 1), else_=0)))
+        .filter(Chapter.book_id.in_(book_ids))
+        .group_by(Chapter.book_id)
+        .all()
+    )
+    return {bid: (int(n), int(done or 0)) for bid, n, done in rows}
+
+
 def manuscript_info(b: Book) -> dict:
     return {
         "manuscript_filename": b.manuscript_filename,
         "manuscript_status":   b.manuscript_status,
         "manuscript_progress": b.manuscript_progress,
     }
+
+
+def _purge_book_files(book: Book) -> None:
+    """Best-effort removal of a book's stored audio and vector points (DB rows are the caller's)."""
+    remote: list[str] = []
+    for ch in book.chapters:
+        for seg in ch.segments:
+            if not seg.filename:
+                continue
+            if storage.is_remote(seg.filename):
+                remote.append(storage.path_from_url(seg.filename))
+            elif os.path.exists(seg.filename):
+                try:
+                    os.remove(seg.filename)
+                except OSError:
+                    pass
+        try:
+            vector_store.delete_segments(ch.number, [seg.id for seg in ch.segments])
+        except Exception:
+            log.warning("delete book %s: vector points for chapter %s not removed", book.id, ch.id, exc_info=True)
+    if remote:
+        try:
+            storage.delete_many(remote)
+        except Exception:
+            log.warning("delete book %s: %d stored recordings not removed", book.id, len(remote), exc_info=True)
+
+
+def _clean_title(title: str) -> str:
+    title = " ".join(title.split())
+    if not title:
+        raise HTTPException(status_code=422, detail="Please give the book a title")
+    if len(title) > MAX_TITLE_CHARS:
+        raise HTTPException(status_code=422, detail=f"Title must be at most {MAX_TITLE_CHARS} characters")
+    return title
 
 
 @router.get("/")
@@ -65,14 +118,15 @@ def list_books(
         .order_by(Book.created_at)
         .all()
     )
+    counts = chapter_counts(db, [b.id for b in books])
     return [
         {
             "id": b.id,
             "title": b.title,
             "genre": b.genre or "fiction",
             "created_at": b.created_at,
-            "chapter_count": len(b.chapters),
-            "done_count": sum(1 for c in b.chapters if c.status == "done"),
+            "chapter_count": counts.get(b.id, (0, 0))[0],
+            "done_count": counts.get(b.id, (0, 0))[1],
             **manuscript_info(b),
         }
         for b in books
@@ -86,6 +140,7 @@ def create_book(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    title = _clean_title(title)
     if genre not in ("fiction", "memoir"):
         genre = "fiction"
     book = Book(title=title, genre=genre, user_id=current_user["sub"])
@@ -102,32 +157,9 @@ def clear_all(
 ):
     """Delete only the current user's data."""
     user_books = db.query(Book).filter(Book.user_id == current_user["sub"]).all()
-
     for book in user_books:
-        for ch in book.chapters:
-            for seg in ch.segments:
-                if seg.filename and os.path.exists(seg.filename):
-                    try:
-                        os.remove(seg.filename)
-                    except OSError:
-                        pass
-            try:
-                delete_collection(ch.number)
-            except Exception:
-                pass
-
-    book_ids = [b.id for b in user_books]
-    if book_ids:
-        chapter_ids = [
-            c.id
-            for b in user_books
-            for c in b.chapters
-        ]
-        if chapter_ids:
-            db.query(AudioSegment).filter(AudioSegment.chapter_id.in_(chapter_ids)).delete(synchronize_session=False)
-        db.query(Chapter).filter(Chapter.book_id.in_(book_ids)).delete(synchronize_session=False)
-        db.query(Book).filter(Book.id.in_(book_ids)).delete(synchronize_session=False)
-
+        _purge_book_files(book)
+        db.delete(book)  # ORM cascade: chapters → parts, recordings
     db.commit()
     return {"status": "cleared"}
 
@@ -144,18 +176,7 @@ def delete_book(
     if book.user_id != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Not your book")
 
-    for ch in book.chapters:
-        for seg in ch.segments:
-            if seg.filename and os.path.exists(seg.filename):
-                try:
-                    os.remove(seg.filename)
-                except OSError:
-                    pass
-        try:
-            delete_collection(ch.number)
-        except Exception:
-            pass
-
+    _purge_book_files(book)
     db.delete(book)
     db.commit()
     return {"status": "deleted"}
