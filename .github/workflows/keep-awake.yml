@@ -1,0 +1,36 @@
+name: Keep Render awake
+
+# Render's free plan puts the app to sleep after 15 minutes without traffic, and the
+# next visitor waits while it boots. Pinging the cheap /health endpoint every
+# 10 minutes keeps it warm. /health doesn't touch the database or Groq.
+#
+# GitHub may run scheduled jobs a few minutes late at busy times, and pauses them if
+# the repo has no commits for 60 days. Re-enable under Actions if that happens.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}   # "Run workflow" button for a manual check
+
+concurrency:
+  group: keep-awake
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        env:
+          # Override with a repository variable KEEP_AWAKE_URL if the domain changes.
+          URL: ${{ vars.KEEP_AWAKE_URL || 'https://books.rig360media.com/health' }}
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$URL" || true)
+            echo "attempt $attempt: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "::warning::$URL did not answer 200 after 3 tries"
+          exit 1
