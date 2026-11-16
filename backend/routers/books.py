@@ -11,7 +11,7 @@ import logging
 from backend.services import storage, vector_store
 from backend.services import manuscript
 from backend.auth import get_current_user
-from backend.routers.chapters import part_rows, MAX_TITLE_CHARS
+from backend.routers.chapters import part_rows, draft_pending, MAX_TITLE_CHARS
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ BACK_MATTER = {
 
 
 def _chapter_row(c: Chapter) -> dict:
+    hide = draft_pending(c)
     return {
         "id": c.id,
         "book_id": c.book_id,
@@ -36,8 +37,8 @@ def _chapter_row(c: Chapter) -> dict:
         "title": c.title,
         "section_type": c.section_type or "chapter",
         "status": c.status,
-        "generated_text": c.generated_text,
-        "summary": c.summary,
+        "generated_text": None if hide else c.generated_text,
+        "summary": None if hide else c.summary,
         "from_manuscript": c.base_text is not None,
         "pdf_filename": c.pdf_filename if c.pdf_text else None,
         "has_written": bool(c.written_text),

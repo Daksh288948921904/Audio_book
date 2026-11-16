@@ -133,7 +133,12 @@ export default function ChapterCard({
 
   const isGenerating = chapter.status === "generating";
   const gradient = GRADIENTS[index % GRADIENTS.length];
-  const statusLabel = isGenerating ? "Writing" : chapter.status === "done" ? "Complete" : "Recording";
+  // The author's own AI draft: written in the background, then emailed to them; the app
+  // shows it only once the email has gone (published_at set).
+  const authorDraft = !!chapter.author_written && !chapter.published_at;
+  const draftPending = chapter.status === "done" && authorDraft;
+  const statusLabel = isGenerating ? (authorDraft ? "Drafting" : "Writing")
+    : draftPending ? "Draft emailing" : chapter.status === "done" ? "Complete" : "Recording";
 
   async function handleDelete() {
     if (!window.confirm(`Delete "${chapter.title || `Chapter ${displayNum ?? chapter.number}`}"? Cannot be undone.`)) return;
@@ -178,7 +183,7 @@ export default function ChapterCard({
   const reviewRequested = !!chapter.review_requested_at;
 
   async function handleWriteWithAI() {
-    if (!window.confirm(`Write "${chapterLabel}" with AI now?\n\nIt takes a few minutes. The chapter appears here when it's ready — nothing is published or shared.`)) return;
+    if (!window.confirm(`Write a draft of "${chapterLabel}" with AI?\n\nOur AI works on it in the background — it usually takes a few minutes. As soon as it's done we'll email the draft to you. Nothing is published or shared.`)) return;
     setAiBusy("write");
     setError(null);
     try {
@@ -274,7 +279,7 @@ export default function ChapterCard({
           <div className="cc-big-num">{String(displayNum).padStart(2, "0")}</div>
         ) : null}
 
-        {chapter.status === "done" && chapter.generated_text && (
+        {chapter.status === "done" && chapter.generated_text && !draftPending && (
           <div className="cc-card-excerpt">
             {chapter.generated_text.replace(/^Chapter\s+\d+[^\n]*\n+/i, "").replace(/\n+/g, " ").slice(0, 110)}…
           </div>
@@ -352,42 +357,59 @@ export default function ChapterCard({
                 </div>
               )}
 
-              {isGenerating && (
+              {isGenerating && authorDraft && (
+                <div className="cc-draft-working">
+                  <div className="cc-draft-head">
+                    <span className="cc-draft-pulse" aria-hidden />
+                    Our AI is working on your draft
+                  </div>
+                  <div className="cc-draft-bar" aria-hidden><span /></div>
+                  <div className="cc-draft-text">
+                    It's reading your recordings and notes and writing the chapter — usually a few minutes.
+                    As soon as it's complete <b>we'll email the draft to you.</b> You can close this page; it keeps going.
+                  </div>
+                </div>
+              )}
+
+              {isGenerating && !authorDraft && (
                 <div className="cc-generating">
                   <div className="spinner" style={{ borderTopColor: "var(--amber)" }} />
                   Writing your chapter… long chapters can take several minutes. It'll appear here when ready.
                 </div>
               )}
 
-              {chapter.status === "done" && chapter.generated_text && !isGenerating && (
+              {draftPending && !isGenerating && (
+                <div className="cc-draft-working cc-draft-done">
+                  <div className="cc-draft-head">📬 Your draft is written</div>
+                  <div className="cc-draft-text">
+                    We're emailing it to you now — check your inbox. It will show here once it's been sent.
+                  </div>
+                  <div className="cc-ai-row">{reviewButton}</div>
+                </div>
+              )}
+
+              {chapter.status === "done" && chapter.generated_text && !isGenerating && !draftPending && (
                 <div className="cc-excerpt">
                   {chapter.generated_text.replace(/^Chapter\s+\d+[^\n]*\n+/i, "").replace(/\n+/g, " ").slice(0, 400)}…
                 </div>
               )}
 
-              {chapter.status === "done" && !isGenerating && (
+              {chapter.status === "done" && !isGenerating && !draftPending && (
                 <div className="cc-actions cc-actions-top">
                   <button className="cc-view" onClick={openAndView}>View Manuscript</button>
                   <button className="cc-pdf" onClick={downloadPdf}>↓ PDF</button>
                   <button
                     className="cc-view"
                     onClick={() => setSharing("chapter")}
-                    disabled={!chapter.published_at && !chapter.author_written}
-                    title={chapter.published_at || chapter.author_written ? "Share this chapter with ChatGPT, Claude or Gemini"
+                    disabled={!chapter.published_at}
+                    title={chapter.published_at ? "Share this chapter with ChatGPT, Claude or Gemini"
                       : "Available once our editors send you this chapter"}
                   >
                     🤖 Share to AI
                   </button>
-                  {!chapter.published_at && !chapter.author_written && (
+                  {!chapter.published_at && (
                     <div className="cc-share-hint">Share to AI unlocks once our editors send you this chapter.</div>
                   )}
-                </div>
-              )}
-
-              {chapter.status === "done" && !isGenerating && chapter.author_written && !chapter.published_at && (
-                <div className="cc-ai-bar">
-                  <div className="cc-ai-label">🔒 You wrote this one with AI — it hasn't been published or shared.</div>
-                  <div className="cc-ai-row">{reviewButton}</div>
                 </div>
               )}
 
@@ -506,7 +528,7 @@ export default function ChapterCard({
                       title={aiAccess ? undefined : "Not turned on for your account yet"}>
                       <span className="cc-ai-ic">{aiAccess ? "✨" : "🔒"}</span>
                       <span className="cc-ai-name">{aiBusy === "write" ? "Starting…" : "Write with AI"}</span>
-                      <span className="cc-ai-sub">Private — nothing is published or shared</span>
+                      <span className="cc-ai-sub">We write a draft and email it to you</span>
                     </button>
                     {reviewButton}
                     <button className="cc-ai-btn" onClick={() => setSharing("notes")} disabled={aiBusy !== null}>

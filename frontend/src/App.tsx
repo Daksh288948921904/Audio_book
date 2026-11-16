@@ -95,14 +95,17 @@ export default function App() {
   }, [activeManuscriptStatus, activeBookId]);
 
   // Chapters are written in the background — refresh while any is being written.
-  const anyGenerating = chapters.some((c) => c.status === "generating");
+  // Also while an author's own AI draft is being emailed — it shows once it's sent.
+  const anyGenerating = chapters.some((c) => c.status === "generating"
+    || (c.status === "done" && c.author_written && !c.published_at));
   useEffect(() => {
     if (!anyGenerating || activeBookId == null) return;
     const bookId = activeBookId;
     const t = setInterval(async () => {
       try {
         const chs = await listBookChapters(bookId);
-        setChapters((prev) => chs.map((c) => prev.find((p) => p.id === c.id && p.status === c.status) ?? c));
+        setChapters((prev) => chs.map((c) => prev.find((p) => p.id === c.id && p.status === c.status
+          && p.published_at === c.published_at) ?? c));
       } catch { /* transient — retry next tick */ }
     }, 10_000);
     return () => clearInterval(t);

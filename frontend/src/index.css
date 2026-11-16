@@ -911,6 +911,32 @@ html, body, #root {
 .cc-ai-ic { font-size: 18px; line-height: 1; }
 .cc-ai-name { font-size: 13px; font-weight: 650; }
 .cc-ai-sub { font-size: 11px; color: var(--text-2); line-height: 1.4; }
+.cc-draft-working {
+  display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: var(--r);
+  background: linear-gradient(135deg, rgba(91,141,239,0.12), rgba(139,92,246,0.12));
+  border: 1px solid rgba(139,92,246,0.35);
+}
+.cc-draft-done { background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.3); }
+.cc-draft-head { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 650; color: var(--text); }
+.cc-draft-pulse {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--violet); flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(139,92,246,0.6); animation: ccDraftPulse 1.6s infinite;
+}
+@keyframes ccDraftPulse {
+  0% { box-shadow: 0 0 0 0 rgba(139,92,246,0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(139,92,246,0); }
+  100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); }
+}
+.cc-draft-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; position: relative; }
+.cc-draft-bar span {
+  position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--blue), var(--violet));
+  animation: ccDraftSlide 1.8s ease-in-out infinite;
+}
+@keyframes ccDraftSlide { 0% { left: -35%; } 100% { left: 100%; } }
+.cc-draft-text { font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
+.cc-draft-text b { color: var(--text); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .cc-draft-pulse, .cc-draft-bar span { animation: none; } }
 .cc-ai-locked { font-size: 11.5px; color: var(--amber); line-height: 1.45; }
 
 /* Published chapters + Share to AI */

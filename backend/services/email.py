@@ -20,10 +20,12 @@ def send_chapter_ready(
     chapter_title: str,
     book_title: str,
     pdf_bytes: bytes,
-) -> None:
+    draft: bool = False,  # the author's own "Write with AI" draft, sent automatically
+) -> bool:
+    """True once sent; False when email isn't configured (BREVO_API_KEY unset)."""
     if not BREVO_API_KEY:
         log.warning("BREVO_API_KEY not set — skipping email")
-        return
+        return False
 
     display_name = to_name or to_email.split("@")[0]
 
@@ -56,8 +58,8 @@ def send_chapter_ready(
           <td style="padding:36px 40px;">
             <p style="margin:0 0 12px;font-size:16px;color:#c4c4e0;">Hi {e_name},</p>
             <p style="margin:0 0 20px;font-size:15px;color:#9090b8;line-height:1.6;">
-              Your chapter <strong style="color:#eaeaf8;">"{e_chapter}"</strong> has been written from
-              your voice recordings and is attached to this email as a PDF.
+              {"Your draft of" if draft else "Your chapter"} <strong style="color:#eaeaf8;">"{e_chapter}"</strong> has been written from
+              your recordings and notes and is attached to this email as a PDF.
             </p>
             <div style="background:#1a1a35;border:1px solid #2e2e55;border-radius:10px;padding:20px 24px;margin-bottom:24px;">
               <p style="margin:0 0 6px;font-size:12px;color:#6060a0;text-transform:uppercase;letter-spacing:0.5px;">Want to make changes?</p>
@@ -89,7 +91,8 @@ def send_chapter_ready(
     payload = {
         "sender": {"name": from_display, "email": from_addr},
         "to": [{"email": to_email, "name": display_name}],
-        "subject": f'"{chapter_title}" is published — {book_title}',
+        "subject": (f'Your draft of "{chapter_title}" is ready — {book_title}' if draft
+                    else f'"{chapter_title}" is published — {book_title}'),
         "htmlContent": html,
         "attachment": [{
             "content": base64.b64encode(pdf_bytes).decode(),
@@ -105,3 +108,4 @@ def send_chapter_ready(
     )
     resp.raise_for_status()
     log.info("Email sent to %s for chapter '%s'", to_email, chapter_title)
+    return True

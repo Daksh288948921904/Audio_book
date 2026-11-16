@@ -309,11 +309,55 @@ def _book_worker(book_key: int) -> None:
                 _running.discard(chapter_id)
 
 
+def _email_author_draft(db: Session, chapter_id: int, pdf_bytes: bytes) -> None:
+    """An author's own "Write with AI" draft isn't shown in the app straight away: it's
+    emailed to them, and marked published (visible in the app) once the email has gone.
+    If it can't be sent, the chapter waits in the CMS for an editor to send it."""
+    from backend.db import User
+    from backend.services import email as email_svc
+
+    db.rollback()
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter or not chapter.author_written or chapter.status != "done":
+        return
+    book = db.query(Book).filter(Book.id == chapter.book_id).first() if chapter.book_id else None
+    user = db.query(User).filter(User.google_id == book.user_id).first() if book and book.user_id else None
+    if not user or not user.email:
+        log.warning("draft email: no author email for chapter %d", chapter_id)
+        return
+    disp = _display_number(chapter, db)
+    title = chapter.title or (f"Chapter {disp}" if disp else f"Chapter {chapter.number}")
+    book_title, to_email, to_name = book.title, user.email, user.name
+    db.rollback()  # don't hold a pooled connection while talking to the mail service
+
+    for attempt in range(3):
+        try:
+            sent = email_svc.send_chapter_ready(to_email=to_email, to_name=to_name, chapter_title=title,
+                                                book_title=book_title, pdf_bytes=pdf_bytes, draft=True)
+            break
+        except Exception:
+            log.warning("draft email for chapter %d failed (attempt %d)", chapter_id, attempt + 1, exc_info=True)
+            if attempt == 2:
+                return
+            time.sleep(10 * (attempt + 1))
+    if not sent:
+        return
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if chapter and chapter.status == "done" and chapter.author_written:
+        chapter.published_at = datetime.now(timezone.utc)
+        db.commit()
+
+
 def _run_one(chapter_id: int) -> None:
     db = SessionLocal()
     try:
-        finish_chapter(db, chapter_id)
+        _, pdf_bytes = finish_chapter(db, chapter_id)
         log.info("generation: chapter %d done", chapter_id)
+        try:
+            _email_author_draft(db, chapter_id, pdf_bytes)
+        except Exception:  # the chapter is written; a mail problem mustn't mark it failed
+            log.exception("draft email for chapter %d failed", chapter_id)
+            db.rollback()
     except ChapterGone:
         log.info("generation: chapter %d was deleted meanwhile — dropped", chapter_id)
     except Exception as exc:

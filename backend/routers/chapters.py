@@ -23,10 +23,11 @@ class TextUpdate(BaseModel):
 @router.get("/{chapter_id}")
 def get_chapter(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
     chapter = owned_chapter(db, chapter_id, user)
+    hide = draft_pending(chapter)
     return {
         "id": chapter.id, "number": chapter.number, "title": chapter.title,
-        "status": chapter.status, "generated_text": chapter.generated_text,
-        "summary": chapter.summary, "from_manuscript": chapter.base_text is not None,
+        "status": chapter.status, "generated_text": None if hide else chapter.generated_text,
+        "summary": None if hide else chapter.summary, "from_manuscript": chapter.base_text is not None,
         "pdf_filename": chapter.pdf_filename if chapter.pdf_text else None,
         "has_written": bool(chapter.written_text),
         "parts": part_rows(chapter),
@@ -45,6 +46,12 @@ _MAX_GENERATED_CHARS = 2_000_000
 _MAX_CHAPTER_PDF_BYTES = 20 * 1024 * 1024
 # ~25k words — a long chapter. A whole book belongs in the book-level manuscript upload.
 _MAX_CHAPTER_PDF_CHARS = 150_000
+
+
+def draft_pending(chapter: Chapter) -> bool:
+    """The author's own AI draft is written but not emailed to them yet — they get it
+    by email first, so the app doesn't show its text until then."""
+    return bool(chapter.author_written and chapter.status == "done" and not chapter.published_at)
 
 
 def part_rows(chapter: Chapter) -> list[dict]:
@@ -290,6 +297,8 @@ def download_pdf(chapter_id: int, db: Session = Depends(get_db), user: dict = _a
     chapter = owned_chapter(db, chapter_id, user)
     if chapter.status != "done" or not chapter.generated_text:
         raise HTTPException(status_code=400, detail="Chapter not yet generated")
+    if draft_pending(chapter):
+        raise HTTPException(status_code=400, detail="Your draft is on its way to your email")
     from backend.services.pdf import generate_pdf
     disp_num = pipeline._display_number(chapter, db)
     pdf_bytes = generate_pdf(chapter.number, chapter.title, chapter.generated_text, display_number=disp_num)

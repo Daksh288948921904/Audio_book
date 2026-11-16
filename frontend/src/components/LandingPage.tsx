@@ -32,7 +32,7 @@ const PRIVACY = [
   { icon: "🔒", title: "Private by default", body: "Your recordings, pages and chapters can be opened only by you and the Rig editor working on your book." },
   { icon: "🙅", title: "Never published without you", body: "Your book isn't posted, sold or shared anywhere unless you choose to share it." },
   { icon: "🤖", title: "Your AI, only when you say", body: "Share with AI sends your words to ChatGPT, Claude or Gemini only when you click it — under your own account." },
-  { icon: "✨", title: "Write with AI, privately", body: "Turn your recordings into a chapter yourself. It lands in your dashboard — nothing is published or shared." },
+  { icon: "✨", title: "Write with AI, privately", body: "Ask our AI for a draft of any chapter and we'll email it straight to you — nothing is published or shared." },
   { icon: "🔑", title: "Sign in with Google", body: "No new password to create or leak. Only your Google account opens your books." },
   { icon: "🗑", title: "Delete any time", body: "Delete a chapter or a whole book and its recordings and files are removed with it." },
 ];
