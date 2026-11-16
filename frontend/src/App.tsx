@@ -38,6 +38,8 @@ export default function App() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
+  // "Write with AI" + "Review with Rig Editor" — turned on per author in the CMS.
+  const [aiAccess, setAiAccess] = useState(false);
 
   // ── Restore session from localStorage on mount ──────────────────────────
   useEffect(() => {
@@ -45,6 +47,7 @@ export default function App() {
     if (!token) { setAuthChecked(true); return; }
     getMe()
       .then((u) => {
+        setAiAccess(!!u.ai_access || u.is_admin);
         if (u.is_admin) {
           setAdminPending({ email: u.email, name: u.name });
         } else {
@@ -57,6 +60,17 @@ export default function App() {
 
   useEffect(() => {
     if (authUser) loadBooks();
+  }, [authUser]);
+
+  // Pick up access the CMS grants (or removes) without signing out: check on sign-in
+  // and whenever the author comes back to this tab.
+  useEffect(() => {
+    if (!authUser) return;
+    const refresh = () => getMe().then((u) => setAiAccess(!!u.ai_access || u.is_admin)).catch(() => {});
+    refresh();
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [authUser]);
 
   useEffect(() => {
@@ -432,7 +446,7 @@ export default function App() {
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                           onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
                           onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded}
-                          bookTitle={activeBook.title} />
+                          bookTitle={activeBook.title} aiAccess={aiAccess} />
                       ))}
                     </div>
                   </>
@@ -452,7 +466,7 @@ export default function App() {
                       onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                       onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
                       onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded}
-                          bookTitle={activeBook.title} />
+                          bookTitle={activeBook.title} aiAccess={aiAccess} />
                   ))}
                 </div>
 
@@ -469,7 +483,7 @@ export default function App() {
                           onChapterUpdated={handleChapterUpdated} onChapterDeleted={handleChapterDeleted}
                           onSegmentDeleted={handleSegmentDeleted} onSegmentMoved={handleSegmentMoved}
                           onViewManuscript={handleViewManuscript} onSegmentAdded={handleSegmentAdded}
-                          bookTitle={activeBook.title} />
+                          bookTitle={activeBook.title} aiAccess={aiAccess} />
                       ))}
                     </div>
                   </>

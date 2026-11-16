@@ -28,6 +28,7 @@ export interface CmsUser {
   email: string;
   book_count: number;
   book_titles: string[];
+  ai_access?: boolean;  // Write with AI + Review with Rig Editor turned on for this author
   created_at: string;
 }
 
@@ -74,7 +75,9 @@ export interface CmsChapter {
   pdf_filename?: string | null;      // chapter PDF attached by the author, written in on the next Write
   has_written?: boolean;             // text the author typed in the app, written in after the PDF
   has_text?: boolean;
-  published_at?: string | null;      // sent to the author (📧 Send); shows in their Published section                // any PDF or typed text in any part — enough to write the chapter
+  published_at?: string | null;      // sent to the author (📧 Send); shows in their Published section
+  review_requested_at?: string | null;  // author clicked "Review with Rig Editor"
+  author_written?: boolean;          // text came from the author's own "Write with AI"
   parts?: { id: number; position: number; pdf_filename: string | null; has_written: boolean }[];
   segment_count: number;
   created_at: string;
@@ -106,6 +109,14 @@ export async function getAdminMe(): Promise<{ sub: string; email: string; name: 
 // ── Admin API ──────────────────────────────────────────────────────────────────
 export async function cmsListUsers(): Promise<CmsUser[]> {
   return (await apiFetch("/admin/users")).json();
+}
+
+export async function cmsSetUserAccess(googleId: string, aiAccess: boolean): Promise<{ ai_access: boolean }> {
+  return (await apiFetch(`/admin/users/${encodeURIComponent(googleId)}/access`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ai_access: aiAccess }),
+  })).json();
 }
 
 export async function cmsSearch(q: string): Promise<SearchResult> {

@@ -26,6 +26,17 @@ const PRICE_FEATURES = [
   "Private by default — only you and your editor see your book",
 ];
 
+// Every line here must stay true: editors on our team can open a book to work on it;
+// nothing leaves Inkwell unless the author sends it.
+const PRIVACY = [
+  { icon: "🔒", title: "Private by default", body: "Your recordings, pages and chapters can be opened only by you and the Rig editor working on your book." },
+  { icon: "🙅", title: "Never published without you", body: "Your book isn't posted, sold or shared anywhere unless you choose to share it." },
+  { icon: "🤖", title: "Your AI, only when you say", body: "Share with AI sends your words to ChatGPT, Claude or Gemini only when you click it — under your own account." },
+  { icon: "✨", title: "Write with AI, privately", body: "Turn your recordings into a chapter yourself. It lands in your dashboard — nothing is published or shared." },
+  { icon: "🔑", title: "Sign in with Google", body: "No new password to create or leak. Only your Google account opens your books." },
+  { icon: "🗑", title: "Delete any time", body: "Delete a chapter or a whole book and its recordings and files are removed with it." },
+];
+
 const BOOK_KINDS = [
   "Memoir", "Family history", "Founder story", "Novel", "Travel journal", "Letters to my kids",
   "Faith journey", "Recipe & memory book", "War & service", "Immigration story", "Life lessons", "Love story",
@@ -69,7 +80,7 @@ const FAQ = [
   { q: "Will it still sound like me?", a: "Yes. Chapters are written from your own recordings and pages, keeping your voice and your details. Nothing is invented, and an editor reviews every chapter." },
   { q: "How long can a recording be?", a: "Up to about two and a half hours per recording, and as many recordings per chapter as you like. You can also upload audio you've recorded elsewhere." },
   { q: "I've already written part of my book.", a: "Upload the whole manuscript as a PDF and we turn it into chapters, or attach a PDF to a single chapter. Your text is polished and kept; new recordings continue the story from there." },
-  { q: "Who can see my book?", a: "Only you and the editor working on it. Your book is never published anywhere unless you choose to share it." },
+  { q: "Who can see my book?", a: "Only you and the editor working on it. Your book is never published anywhere, and nothing is sent to an AI app, unless you choose to share it." },
   { q: `What does $${PRICE} include?`, a: "Everything on this page for your book: recording, uploads, chapter writing with memory across chapters, editor review, the reader, audio playback, PDFs and Share to AI." },
 ];
 
@@ -111,6 +122,7 @@ export default function LandingPage({ onLogin }: Props) {
 
         <Bento />
         <Story />
+        <Privacy />
         <Numbers />
         <Pricing onStart={start} />
         <Faq />
@@ -166,7 +178,7 @@ export default function LandingPage({ onLogin }: Props) {
                   width="280"
                 />
               </div>
-              <p className="lp-signin-fine">Your story is private. Only you can access your books.</p>
+              <p className="lp-signin-fine">Your story is private — only you and your Rig editor can open it, and nothing is shared unless you choose to.</p>
               <div className="lp-signin-badges">
                 <span>🔒 Private</span>
                 <span>☁ Cloud saved</span>
@@ -191,7 +203,7 @@ function Nav({ onStart }: { onStart: () => void }) {
       <div className="lx-nav-inner">
         <a className="lx-brand" href="#top"><span className="lx-mark">I</span> Inkwell</a>
         <div className="lx-nav-links">
-          <a href="#product">Product</a><a href="#story">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
+          <a href="#product">Product</a><a href="#story">How it works</a><a href="#privacy">Privacy</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a>
         </div>
         <div className="lx-nav-right">
           <button className="lx-nav-signin" onClick={onStart}>Sign in</button>
@@ -235,7 +247,7 @@ function Hero({ onStart }: { onStart: () => void }) {
             <a className="lx-cta-ghost" href="#story">See how it works</a>
           </div>
           <div className="lx-trust">
-            <span>${PRICE} {PRICE_TERM.split(" · ")[0]}</span><i /><span>Editor-reviewed chapters</span><i /><span>Private by default</span>
+            <span>${PRICE} {PRICE_TERM.split(" · ")[0]}</span><i /><span>Editor-reviewed chapters</span><i /><a href="#privacy">🔒 Private by default</a>
           </div>
         </InView>
       </div>
@@ -381,6 +393,28 @@ function Numbers() {
           <div className="lx-num-l">{it.label}</div>
         </InView>
       ))}
+    </section>
+  );
+}
+
+function Privacy() {
+  return (
+    <section className="lx-section lx-privacy" id="privacy">
+      <InView className="lx-head">
+        <p className="lx-eyebrow">Privacy</p>
+        <h2 className="lx-h2">Your story stays yours. <em>Until you choose.</em></h2>
+      </InView>
+      <div className="lx-privacy-grid">
+        {PRIVACY.map((b, i) => (
+          <InView key={b.title} className="lx-privacy-badge" delay={i * 0.06}>
+            <span className="lx-privacy-ic" aria-hidden>{b.icon}</span>
+            <div>
+              <h3>{b.title}</h3>
+              <p>{b.body}</p>
+            </div>
+          </InView>
+        ))}
+      </div>
     </section>
   );
 }

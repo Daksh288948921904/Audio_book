@@ -374,6 +374,22 @@ html:has(.lx) { scroll-behavior: smooth; }
 .lx-share-row span { flex: 1; text-align: center; padding: 8px 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.04); font-weight: 600; font-size: 11px; }
 .lx-share-note { font-size: 10.5px; color: #34D399; }
 
+/* ── Privacy badges ── */
+.lx-privacy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.lx-privacy-badge {
+  display: flex; gap: 16px; align-items: flex-start; padding: 22px 22px 24px; border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015));
+  border: 1px solid var(--lx-line);
+}
+.lx-privacy-ic {
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 20px;
+  background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.28);
+}
+.lx-privacy-badge h3 { margin: 2px 0 6px; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.lx-privacy-badge p { margin: 0; color: var(--lx-dim); font-size: 14px; line-height: 1.55; }
+.lx-trust a { color: inherit; }
+.lx-trust a:hover { color: var(--lx-text); }
+
 /* ═══════════════  Responsive  ═══════════════ */
 @media (max-width: 1100px) {
   .lx-float-rec { left: 0; } .lx-float-ctx { right: 0; }
@@ -388,6 +404,7 @@ html:has(.lx) { scroll-behavior: smooth; }
   .lx-step-stage-mobile { display: block; margin-top: 26px; }
   .lx-stage-share { position: static; width: 100%; margin-top: 12px; }
   .lx-numbers { grid-template-columns: 1fr 1fr; }
+  .lx-privacy-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 680px) {
   .lx-hero { padding-top: 120px; }
@@ -404,6 +421,7 @@ html:has(.lx) { scroll-behavior: smooth; }
   .lx-footer-links { margin-left: 0; }
   .lx-price-card { padding: 32px 22px 26px; }
   .lx-price { font-size: 76px; }
+  .lx-privacy-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .lx-aurora span, .lx-float, .lx-cta-shine, .lx-rec-dot, .lx-spin, .lx-caret { animation: none !important; }

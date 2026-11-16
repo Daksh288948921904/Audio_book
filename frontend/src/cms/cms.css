@@ -221,6 +221,16 @@ html, body { background: var(--bg); color: var(--text-1); font-family: -apple-sy
 
 .up-date { font-size: 12px; color: var(--text-3); }
 
+.up-access {
+  padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: inherit; white-space: nowrap;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-2, #a0a0c0);
+  transition: background .15s, border-color .15s, color .15s;
+}
+.up-access:hover:not(:disabled) { border-color: rgba(139,92,246,0.5); color: #fff; }
+.up-access.on { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.4); color: #34D399; }
+.up-access:disabled { opacity: 0.5; cursor: wait; }
+
 .up-arrow {
   color: var(--text-3); transition: color 0.15s, transform 0.15s; flex-shrink: 0;
   width: 28px; display: flex; align-items: center; justify-content: flex-end;

@@ -4,6 +4,7 @@ import {
   updateChapterTitle, deleteSegment,
   reorderSegments, moveSegment,
   downloadChapterPdf, getChapter, addChapterPart, removeChapterPart,
+  writeChapterWithAI, requestChapterReview,
   type Chapter, type ChapterPart, type Segment,
 } from "../api/client";
 import SegmentCard from "./SegmentCard";
@@ -40,11 +41,13 @@ interface Props {
   onViewManuscript: (ch: Chapter) => void;
   onSegmentAdded: (chapterId: number, segment: Segment) => void;
   bookTitle?: string;
+  /** Write with AI + Review with Rig Editor are turned on for this author (CMS "Access"). */
+  aiAccess?: boolean;
 }
 
 export default function ChapterCard({
   chapter, segments, allChapters, index, displayNum,
-  onChapterUpdated, onChapterDeleted, onSegmentDeleted, onSegmentMoved, onViewManuscript, onSegmentAdded, bookTitle,
+  onChapterUpdated, onChapterDeleted, onSegmentDeleted, onSegmentMoved, onViewManuscript, onSegmentAdded, bookTitle, aiAccess = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(false);
@@ -167,7 +170,41 @@ export default function ChapterCard({
   const parts = chapter.parts ?? [];
   const chapterLabel = chapter.title || `Chapter ${displayNum ?? chapter.number}`;
   const [addingPart, setAddingPart] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [sharing, setSharing] = useState<false | "chapter" | "notes">(false);
+  const [aiBusy, setAiBusy] = useState<null | "write" | "review">(null);
+
+  const hasMaterial = segments.length > 0 || !!chapter.pdf_filename || !!chapter.has_written
+    || !!chapter.from_manuscript || parts.some((p) => p.pdf_filename || p.has_written);
+  const reviewRequested = !!chapter.review_requested_at;
+
+  async function handleWriteWithAI() {
+    if (!window.confirm(`Write "${chapterLabel}" with AI now?\n\nIt takes a few minutes. The chapter appears here when it's ready — nothing is published or shared.`)) return;
+    setAiBusy("write");
+    setError(null);
+    try {
+      await writeChapterWithAI(chapter.id);
+      onChapterUpdated({ ...chapter, status: "generating", author_written: true });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setAiBusy(null); }
+  }
+
+  async function handleReview() {
+    setAiBusy("review");
+    setError(null);
+    try {
+      onChapterUpdated({ ...chapter, review_requested_at: await requestChapterReview(chapter.id) });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setAiBusy(null); }
+  }
+
+  const reviewButton = (
+    <button className="cc-ai-btn" onClick={handleReview} disabled={!aiAccess || reviewRequested || aiBusy !== null}
+      title={aiAccess ? undefined : "Not turned on for your account yet"}>
+      <span className="cc-ai-ic">{aiAccess ? "🖋" : "🔒"}</span>
+      <span className="cc-ai-name">{reviewRequested ? "Sent to Rig editors" : aiBusy === "review" ? "Sending…" : "Review with Rig Editor"}</span>
+      <span className="cc-ai-sub">{reviewRequested ? "✓ An editor will review this chapter" : "A Rig editor reviews and polishes it"}</span>
+    </button>
+  );
 
   function updatePart(partId: number, patch: Partial<ChapterPart>) {
     onChapterUpdated({ ...chapter, parts: parts.map((p) => p.id === partId ? { ...p, ...patch } : p) });
@@ -256,6 +293,7 @@ export default function ChapterCard({
       {sharing && (
         <ShareToAI
           chapterId={chapter.id}
+          mode={sharing}
           label={chapter.section_type === "chapter" && displayNum != null
             ? (chapter.title ? `Chapter ${displayNum}: ${chapter.title}` : `Chapter ${displayNum}`)
             : (chapter.title ?? `Section ${chapter.number}`)}
@@ -333,16 +371,23 @@ export default function ChapterCard({
                   <button className="cc-pdf" onClick={downloadPdf}>↓ PDF</button>
                   <button
                     className="cc-view"
-                    onClick={() => setSharing(true)}
-                    disabled={!chapter.published_at}
-                    title={chapter.published_at ? "Share this chapter with ChatGPT, Claude or Gemini"
+                    onClick={() => setSharing("chapter")}
+                    disabled={!chapter.published_at && !chapter.author_written}
+                    title={chapter.published_at || chapter.author_written ? "Share this chapter with ChatGPT, Claude or Gemini"
                       : "Available once our editors send you this chapter"}
                   >
                     🤖 Share to AI
                   </button>
-                  {!chapter.published_at && (
+                  {!chapter.published_at && !chapter.author_written && (
                     <div className="cc-share-hint">Share to AI unlocks once our editors send you this chapter.</div>
                   )}
+                </div>
+              )}
+
+              {chapter.status === "done" && !isGenerating && chapter.author_written && !chapter.published_at && (
+                <div className="cc-ai-bar">
+                  <div className="cc-ai-label">🔒 You wrote this one with AI — it hasn't been published or shared.</div>
+                  <div className="cc-ai-row">{reviewButton}</div>
                 </div>
               )}
 
@@ -451,6 +496,31 @@ export default function ChapterCard({
                     </div>
                   )}
                 </>
+              )}
+
+              {!isGenerating && chapter.status === "recording" && hasMaterial && (
+                <div className="cc-ai-bar">
+                  <div className="cc-ai-label">Ready to turn this into a chapter?</div>
+                  <div className="cc-ai-row">
+                    <button className="cc-ai-btn cc-ai-primary" onClick={handleWriteWithAI} disabled={!aiAccess || aiBusy !== null}
+                      title={aiAccess ? undefined : "Not turned on for your account yet"}>
+                      <span className="cc-ai-ic">{aiAccess ? "✨" : "🔒"}</span>
+                      <span className="cc-ai-name">{aiBusy === "write" ? "Starting…" : "Write with AI"}</span>
+                      <span className="cc-ai-sub">Private — nothing is published or shared</span>
+                    </button>
+                    {reviewButton}
+                    <button className="cc-ai-btn" onClick={() => setSharing("notes")} disabled={aiBusy !== null}>
+                      <span className="cc-ai-ic">🤖</span>
+                      <span className="cc-ai-name">Share with AI</span>
+                      <span className="cc-ai-sub">Take your transcripts to ChatGPT, Claude or Gemini</span>
+                    </button>
+                  </div>
+                  {!aiAccess && (
+                    <div className="cc-ai-locked">
+                      Write with AI and Rig review aren't turned on for your account yet — ask the Rig team to switch them on.
+                    </div>
+                  )}
+                </div>
               )}
 
               {!isGenerating && (

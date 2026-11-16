@@ -67,7 +67,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     setError(null);
     try {
       await cmsFinishChapter(chapter.id);
-      onUpdated({ ...chapter, status: "generating", generation_error: null });
+      onUpdated({ ...chapter, status: "generating", generation_error: null, author_written: false });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setWriting(false); }
   }
@@ -83,7 +83,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     setError(null);
     try {
       await cmsRewriteChapter(chapter.id);
-      onUpdated({ ...chapter, status: "generating", generation_error: null });
+      onUpdated({ ...chapter, status: "generating", generation_error: null, author_written: false });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setWriting(false); }
   }
@@ -101,7 +101,7 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
     try {
       const r = await cmsSendChapterEmail(chapter.id);
       setEmailSent(r.to);
-      onUpdated({ ...chapter, published_at: r.published_at });
+      onUpdated({ ...chapter, published_at: r.published_at, review_requested_at: null });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setEmailing(false); }
   }
@@ -175,6 +175,14 @@ export default function AdminChapterCard({ chapter, segments, index, displayNumb
         </div>
         {chapter.status === "done" && chapter.published_at && (
           <div className="adm-published">✓ Published · {new Date(chapter.published_at).toLocaleDateString()}</div>
+        )}
+        {chapter.review_requested_at && (
+          <div className="adm-published" style={{ color: "#fbbf24" }}>
+            🖋 Author asked for review · {new Date(chapter.review_requested_at).toLocaleDateString()}
+          </div>
+        )}
+        {chapter.status === "done" && chapter.author_written && (
+          <div className="adm-published" style={{ color: "#a78bfa" }}>✨ Written by the author with AI</div>
         )}
 
         {chapter.status === "done" && chapter.generated_text && (

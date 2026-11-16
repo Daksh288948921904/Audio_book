@@ -99,9 +99,26 @@ def list_users(db: Session = Depends(get_db), _: dict = _admin):
             "email":      u.email,
             "book_count": len(books),
             "book_titles": books,
+            "ai_access":  bool(u.ai_access),
             "created_at": u.created_at,
         })
     return result
+
+
+class AccessUpdate(BaseModel):
+    ai_access: bool
+
+
+@router.put("/users/{google_id}/access")
+def set_user_access(google_id: str, body: AccessUpdate, db: Session = Depends(get_db), _: dict = _admin):
+    """Turn "Write with AI" and "Review with Rig Editor" on or off for an author.
+    Checked live on every request, so it applies without them signing in again."""
+    user = db.query(User).filter(User.google_id == google_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.ai_access = body.ai_access
+    db.commit()
+    return {"google_id": google_id, "ai_access": bool(user.ai_access)}
 
 
 @router.get("/search")
@@ -238,6 +255,8 @@ def list_book_chapters(book_id: int, db: Session = Depends(get_db), _: dict = _a
             "has_written":   bool(c.written_text),
             "has_text":      has_own_text(c),
             "published_at":  c.published_at,
+            "review_requested_at": c.review_requested_at,
+            "author_written": bool(c.author_written),
             "parts":         part_rows(c),
             "generation_error": pipeline.last_error(c.id) if c.status != "generating" else None,
             "segment_count": seg_counts.get(c.id, 0),
@@ -266,6 +285,8 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _admin
         "has_written": bool(chapter.written_text),
         "has_text": has_own_text(chapter),
         "published_at": chapter.published_at,
+        "review_requested_at": chapter.review_requested_at,
+        "author_written": bool(chapter.author_written),
         "parts": part_rows(chapter),
         "generation_error": pipeline.last_error(chapter.id) if chapter.status != "generating" else None,
         "created_at":    chapter.created_at,
@@ -313,6 +334,9 @@ def compile_book(book_id: int, db: Session = Depends(get_db), _: dict = _admin):
         else:
             to_queue.append(ch)
     queued = set(pipeline.enqueue(db, [ch.id for ch in to_queue]))
+    if queued:  # written by the editors now, not the author's own AI write
+        db.query(Chapter).filter(Chapter.id.in_(queued)).update({"author_written": False}, synchronize_session=False)
+        db.commit()
     for ch in to_queue:
         if ch.id in queued:
             results.append({"chapter_id": ch.id, "number": ch.number, "status": "queued"})
@@ -338,6 +362,8 @@ def rewrite_chapter(chapter_id: int, db: Session = Depends(get_db), _: dict = _a
         raise HTTPException(status_code=400, detail="This chapter has no recordings or text of its own to rewrite from")
     if not pipeline.enqueue(db, [chapter_id]):
         raise HTTPException(status_code=409, detail="Chapter is already being written")
+    db.query(Chapter).filter(Chapter.id == chapter_id).update({"author_written": False}, synchronize_session=False)
+    db.commit()
     return {"status": "generating"}
 
 
@@ -406,6 +432,7 @@ def send_chapter_email(chapter_id: int, db: Session = Depends(get_db), _: dict =
         raise HTTPException(status_code=500, detail=f"Email failed: {e}")
     # The author now has this version — it shows in their Published section.
     chapter.published_at = datetime.now(timezone.utc)
+    chapter.review_requested_at = None  # reviewed and sent — the request is answered
     db.commit()
     return {"status": "sent", "to": user.email, "published_at": chapter.published_at}
 

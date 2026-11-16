@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cmsListUsers, type CmsUser } from "../api/adminClient";
+import { cmsListUsers, cmsSetUserAccess, type CmsUser } from "../api/adminClient";
 import { AnimatedNumber } from "../../components/landing/primitives";
 
 interface Props {
@@ -33,6 +33,20 @@ export default function UsersPage({ onSelect }: Props) {
   const [query, setQuery]     = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [savingAccess, setSavingAccess] = useState<Set<string>>(new Set());
+
+  async function toggleAccess(u: CmsUser) {
+    const next = !u.ai_access;
+    if (!window.confirm(next
+      ? `Give ${u.name ?? u.email} access?\n\nThey'll be able to Write with AI and ask for Review with Rig Editor on their chapters.`
+      : `Remove access for ${u.name ?? u.email}?\n\nWrite with AI and Review with Rig Editor will be locked for them again.`)) return;
+    setSavingAccess((s) => new Set(s).add(u.google_id));
+    try {
+      const { ai_access } = await cmsSetUserAccess(u.google_id, next);
+      setUsers((us) => us.map((x) => x.google_id === u.google_id ? { ...x, ai_access } : x));
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setSavingAccess((s) => { const n = new Set(s); n.delete(u.google_id); return n; }); }
+  }
 
   useEffect(() => {
     cmsListUsers()
@@ -111,6 +125,7 @@ export default function UsersPage({ onSelect }: Props) {
             <span style={{ flex: 1 }}>User</span>
             <span style={{ width: 100, textAlign: "center" }}>Books</span>
             <span style={{ width: 130 }}>Joined</span>
+            <span style={{ width: 120, textAlign: "center" }}>Access</span>
             <span style={{ width: 28 }} />
           </div>
 
@@ -159,6 +174,18 @@ export default function UsersPage({ onSelect }: Props) {
 
                 {/* Date */}
                 <div className="up-date" style={{ width: 130 }}>{fmt(u.created_at)}</div>
+
+                {/* Access: Write with AI + Review with Rig Editor */}
+                <div style={{ width: 120, display: "flex", justifyContent: "center" }}>
+                  <button
+                    className={`up-access ${u.ai_access ? "on" : ""}`}
+                    disabled={savingAccess.has(u.google_id)}
+                    onClick={(e) => { e.stopPropagation(); toggleAccess(u); }}
+                    title={u.ai_access ? "Has Write with AI + Rig review — click to remove" : "Give Write with AI + Rig review"}
+                  >
+                    {savingAccess.has(u.google_id) ? "Saving…" : u.ai_access ? "✓ Access" : "+ Access"}
+                  </button>
+                </div>
 
                 {/* Arrow */}
                 <div className="up-arrow">

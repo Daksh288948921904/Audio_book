@@ -1,10 +1,12 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from backend.db import get_db, Book, Chapter, ChapterPart, AudioSegment
+from backend.db import get_db, Book, Chapter, ChapterPart, AudioSegment, User
 from backend.services import pipeline, manuscript
 from backend.routers.audio import delete_segment_files
 from backend.auth import get_current_user, require_admin
@@ -29,6 +31,8 @@ def get_chapter(chapter_id: int, db: Session = Depends(get_db), user: dict = _au
         "has_written": bool(chapter.written_text),
         "parts": part_rows(chapter),
         "published_at": chapter.published_at,
+        "review_requested_at": chapter.review_requested_at,
+        "author_written": bool(chapter.author_written),
         "created_at": chapter.created_at,
         "finished_at": chapter.finished_at,
     }
@@ -201,7 +205,84 @@ def finish(chapter_id: int, db: Session = Depends(get_db), _: dict = Depends(req
     # but not queued (shouldn't happen — restarts re-queue) is simply queued again.
     if not pipeline.enqueue(db, [chapter_id]):
         raise HTTPException(status_code=409, detail="Chapter is already being written")
+    db.query(Chapter).filter(Chapter.id == chapter_id).update({"author_written": False}, synchronize_session=False)
+    db.commit()  # written by the editors now
     return {"status": "generating"}
+
+
+def _require_ai_access(db: Session, user: dict) -> None:
+    """Write with AI and Rig review are turned on per author in the CMS (users.ai_access)."""
+    if user.get("is_admin"):
+        return
+    if not db.query(User.ai_access).filter(User.google_id == user["sub"]).scalar():
+        raise HTTPException(status_code=403,
+                            detail="This isn't turned on for your account yet — ask the Rig team for access")
+
+
+def _has_audio(db: Session, chapter_id: int) -> bool:
+    return db.query(AudioSegment.id).filter(AudioSegment.chapter_id == chapter_id).first() is not None
+
+
+def _has_material(db: Session, chapter: Chapter) -> bool:
+    return chapter.base_text is not None or has_own_text(chapter) or _has_audio(db, chapter.id)
+
+
+@router.get("/{chapter_id}/material")
+def chapter_material(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
+    """Everything the author has put into the chapter, as plain text, in writing order:
+    manuscript text, then for each part its PDF text, typed text and recording transcripts.
+    Open to every author — it's for taking their own words to their own AI."""
+    chapter = owned_chapter(db, chapter_id, user)
+    segs = (db.query(AudioSegment).filter(AudioSegment.chapter_id == chapter.id)
+            .order_by(AudioSegment.order_index, AudioSegment.id).all())
+    multi = bool(chapter.parts)
+
+    def block(label: str, body: str | None) -> str | None:
+        body = (body or "").strip()
+        return f"[{label}]\n{body}" if body else None
+
+    def part_blocks(src, part_id: int | None, prefix: str) -> list[str]:
+        out = [block(f"{prefix}PDF text", src.pdf_text), block(f"{prefix}Written text", src.written_text)]
+        mine = [g for g in segs if g.part_id == part_id and (g.transcript or "").strip()]
+        out += [block(f"{prefix}Recording {i}", g.transcript) for i, g in enumerate(mine, 1)]
+        return [b for b in out if b]
+
+    blocks = [b for b in [block("From my manuscript", chapter.base_text)] if b]
+    blocks += part_blocks(chapter, None, "Part 1 · " if multi else "")
+    for p in chapter.parts:
+        blocks += part_blocks(p, p.id, f"Part {p.position} · ")
+    if not blocks:
+        raise HTTPException(status_code=400, detail="Nothing added to this chapter yet")
+    return {"text": "\n\n".join(blocks)}
+
+
+@router.post("/{chapter_id}/write", status_code=202)
+def write_with_ai(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
+    """The author writes the chapter themselves with AI — same writer the editors use,
+    result goes straight to their dashboard (nothing is sent or published)."""
+    _require_ai_access(db, user)
+    chapter = _own_recording_chapter(db, chapter_id, user)
+    _not_generating(chapter)
+    if not _has_material(db, chapter):
+        raise HTTPException(status_code=400, detail="Record, upload or type something in this chapter first")
+    chapter.author_written = True
+    db.commit()
+    if not pipeline.enqueue(db, [chapter_id]):
+        raise HTTPException(status_code=409, detail="Chapter is already being written")
+    return {"status": "generating"}
+
+
+@router.post("/{chapter_id}/review")
+def request_review(chapter_id: int, db: Session = Depends(get_db), user: dict = _auth):
+    """Ask a Rig editor to review this chapter. Shows up on the chapter in the CMS."""
+    _require_ai_access(db, user)
+    chapter = owned_chapter(db, chapter_id, user)
+    if not chapter.generated_text and not _has_material(db, chapter):
+        raise HTTPException(status_code=400, detail="Record, upload or type something in this chapter first")
+    if not chapter.review_requested_at:
+        chapter.review_requested_at = datetime.now(timezone.utc)
+        db.commit()
+    return {"id": chapter.id, "review_requested_at": chapter.review_requested_at}
 
 
 @router.get("/{chapter_id}/pdf")

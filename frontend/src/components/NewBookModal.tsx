@@ -65,6 +65,8 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
       <div className="modal-box">
         <div className="modal-title">New Book</div>
 
+        <div className="nb-cols">
+        <div className="nb-col">
         {/* Title */}
         <div className="field">
           <label>Title</label>
@@ -135,6 +137,9 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
           </div>
         </div>
 
+        </div>
+
+        <div className="nb-col">
         {!pdf && <>
         {/* Structure */}
         <div className="field">
@@ -216,6 +221,8 @@ export default function NewBookModal({ onCreated, onClose }: Props) {
           <div className="nb-sections-total">
             {pdf ? "Chapters are created from your manuscript" : <>{FRONT_MATTER[genre].length + (prologue ? 1 : 0) + finalCount + (epilogue ? 1 : 0) + BACK_MATTER[genre].length} total recordable sections</>}
           </div>
+        </div>
+        </div>
         </div>
 
         {error && (

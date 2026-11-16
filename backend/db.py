@@ -1,7 +1,7 @@
 import os
 import re
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, text
+from sqlalchemy import create_engine, Boolean, Column, Integer, String, Text, DateTime, ForeignKey, text, false
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from backend.config import DATABASE_URL
 
@@ -47,6 +47,10 @@ class User(Base):
     email     = Column(String, nullable=False)
     name      = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Turned on per author in the CMS: unlocks "Write with AI" and "Review with Rig Editor".
+    # Read from here on every request (not baked into the 30-day token), so it takes
+    # effect — and can be taken away — immediately.
+    ai_access  = Column(Boolean, nullable=False, default=False, server_default=false())
 
 
 class Book(Base):
@@ -87,6 +91,8 @@ class Chapter(Base):
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     finished_at    = Column(DateTime, nullable=True)
     published_at   = Column(DateTime, nullable=True)  # CMS sent this version to the author; cleared on reopen
+    review_requested_at = Column(DateTime, nullable=True)  # author asked a Rig editor to review it
+    author_written = Column(Boolean, nullable=False, default=False, server_default=false())  # text came from the author's own "Write with AI"
 
     book     = relationship("Book", back_populates="chapters")
     segments = relationship("AudioSegment", back_populates="chapter", cascade="all, delete-orphan")
@@ -167,12 +173,18 @@ def _sqlite_migrate():
             conn.execute(text("ALTER TABLE chapters ADD COLUMN base_text TEXT"))
             conn.commit()
         for col, typ in (("pdf_filename", "VARCHAR"), ("pdf_text", "TEXT"), ("written_text", "TEXT"),
-                         ("published_at", "TIMESTAMP")):
+                         ("published_at", "TIMESTAMP"), ("review_requested_at", "TIMESTAMP"),
+                         ("author_written", "BOOLEAN NOT NULL DEFAULT 0")):
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE chapters ADD COLUMN {col} {typ}"))
                 conn.commit()
         conn.execute(text(_MOVE_TYPED_TEXT))
         conn.commit()
+
+        user_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+        if "ai_access" not in user_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN ai_access BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
 
         seg_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(audio_segments)")).fetchall()]
         if "part_id" not in seg_cols:
@@ -251,6 +263,9 @@ def _postgres_migrate():
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS pdf_text TEXT"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS written_text TEXT"))
         conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS published_at TIMESTAMP WITH TIME ZONE"))
+        conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS review_requested_at TIMESTAMP WITH TIME ZONE"))
+        conn.execute(text("ALTER TABLE chapters ADD COLUMN IF NOT EXISTS author_written BOOLEAN NOT NULL DEFAULT FALSE"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_access BOOLEAN NOT NULL DEFAULT FALSE"))
         conn.execute(text(
             "ALTER TABLE audio_segments ADD COLUMN IF NOT EXISTS part_id INTEGER "
             "REFERENCES chapter_parts(id) ON DELETE CASCADE"

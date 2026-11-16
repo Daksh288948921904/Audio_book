@@ -43,6 +43,8 @@ def _chapter_row(c: Chapter) -> dict:
         "has_written": bool(c.written_text),
         "parts": part_rows(c),
         "published_at": c.published_at,
+        "review_requested_at": c.review_requested_at,
+        "author_written": bool(c.author_written),
         "created_at": c.created_at,
         "finished_at": c.finished_at,
     }

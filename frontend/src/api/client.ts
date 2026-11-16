@@ -48,6 +48,8 @@ export interface Chapter {
   has_written?: boolean;         // text typed in the app, not yet written in (goes after the PDF)
   parts?: ChapterPart[];         // "+ Add more" parts 2, 3, … — part 1 is the chapter's own fields
   published_at?: string | null;  // when the CMS sent this chapter to the author
+  review_requested_at?: string | null;  // author asked a Rig editor to review it
+  author_written?: boolean;      // text came from the author's own "Write with AI"
 }
 
 export interface ChapterPart {
@@ -72,7 +74,7 @@ const partQuery = (partId?: number | null) => (partId != null ? `?part_id=${part
 // ── Auth ─────────────────────────────────────────────────────────────────────
 export async function loginWithGoogle(
   credential: string
-): Promise<{ token: string; email: string; name: string; is_admin: boolean }> {
+): Promise<{ token: string; email: string; name: string; is_admin: boolean; ai_access: boolean }> {
   const res = await fetch(`${BASE}/auth/google`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -82,7 +84,7 @@ export async function loginWithGoogle(
   return res.json();
 }
 
-export async function getMe(): Promise<{ sub: string; email: string; name: string; is_admin: boolean }> {
+export async function getMe(): Promise<{ sub: string; email: string; name: string; is_admin: boolean; ai_access: boolean }> {
   const res = await fetch(`${BASE}/auth/me`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
@@ -175,6 +177,26 @@ export async function finishChapter(id: number): Promise<{ status: string; gener
   });
   if (!res.ok) throw new Error(await errorDetail(res));
   return res.json();
+}
+
+/** Author's own AI write (needs access turned on in the CMS). Runs in the background. */
+export async function writeChapterWithAI(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/chapters/${id}/write`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+}
+
+/** Ask a Rig editor to review the chapter (needs access turned on in the CMS). */
+export async function requestChapterReview(id: number): Promise<string> {
+  const res = await fetch(`${BASE}/chapters/${id}/review`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return (await res.json()).review_requested_at;
+}
+
+/** The author's own words in the chapter — PDF text, typed text and recording transcripts. */
+export async function getChapterMaterial(id: number): Promise<string> {
+  const res = await fetch(`${BASE}/chapters/${id}/material`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await errorDetail(res));
+  return (await res.json()).text;
 }
 
 export async function updateChapterTitle(id: number, title: string): Promise<void> {

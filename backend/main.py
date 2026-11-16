@@ -114,12 +114,15 @@ def auth_google(body: GoogleAuthBody, db: Session = Depends(get_db)):
     db.commit()
 
     token = create_app_token(info["sub"], info["email"], info["name"])
-    return {"token": token, "email": info["email"], "name": info["name"], "is_admin": info["email"] in ADMIN_EMAILS}
+    return {"token": token, "email": info["email"], "name": info["name"],
+            "is_admin": info["email"] in ADMIN_EMAILS, "ai_access": bool(user.ai_access)}
 
 
 @app.get("/auth/me")
-def auth_me(current_user: dict = Depends(get_current_user)):
-    return current_user
+def auth_me(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    # ai_access is looked up live, so a CMS change shows up on the author's next page load.
+    access = db.query(User.ai_access).filter(User.google_id == current_user["sub"]).scalar()
+    return {**current_user, "ai_access": bool(access)}
 
 
 @app.get("/health")
